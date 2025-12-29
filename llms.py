@@ -1,16 +1,29 @@
 import os
 """Loading LLMs and Embeddings."""
-from langchain.embeddings import CacheBackedEmbeddings
-from langchain.storage import LocalFileStore
-from langchain_groq import ChatGroq
-from langchain_openai import OpenAIEmbeddings
 
 from config import set_environment
 
 set_environment()
 
-# Ensure local cache directory exists (Streamlit Cloud uses an ephemeral FS)
+# Ensure local cache directory exists (Streamlit Cloud uses ephemeral FS)
 os.makedirs("./cache", exist_ok=True)
+
+# --- LangChain imports (version-safe) ---
+try:
+    # Newer LangChain locations
+    from langchain.embeddings.cache import CacheBackedEmbeddings
+except Exception:
+    # Older LangChain fallback
+    from langchain.embeddings import CacheBackedEmbeddings
+
+try:
+    from langchain.storage import LocalFileStore
+except Exception:
+    # Older fallback (rare)
+    from langchain.storage import LocalFileStore
+
+from langchain_openai import OpenAIEmbeddings
+from langchain_groq import ChatGroq
 
 chat_model = ChatGroq(
     model="llama-3.3-70b-versatile",
@@ -25,7 +38,10 @@ store = LocalFileStore("./cache/")
 underlying_embeddings = OpenAIEmbeddings(
     model="text-embedding-3-large",
 )
-# Avoiding unnecessary costs by caching the embeddings.
+
+# Cache embeddings to avoid repeat costs
 EMBEDDINGS = CacheBackedEmbeddings.from_bytes_store(
-    underlying_embeddings, store, namespace=underlying_embeddings.model
+    underlying_embeddings,
+    store,
+    namespace=underlying_embeddings.model,
 )
