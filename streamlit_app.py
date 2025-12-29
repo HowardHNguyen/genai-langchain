@@ -114,8 +114,6 @@ with tab_about:
 
     st.markdown(
         """
-## About this app
-
 This application is a **Marketing Operations AI Assistant (Agentic Prototype)** designed to help Marketing teams work faster, more consistently, and with greater confidence by grounding AI responses in **our internal documentation, standards, and operating model**.
 
 It is **not a replacement for Microsoft Copilot**.  
@@ -230,8 +228,6 @@ with tab_arch:
 
     st.markdown(
         """
-## Architecture & Technical Overview
-
 This application is built using a **modular, agentic architecture** designed for clarity, scalability, and enterprise evolution.
 
 Think of the system as **four layers**, moving from user interaction to intelligent response.
