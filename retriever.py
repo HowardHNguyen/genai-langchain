@@ -9,57 +9,62 @@ from langchain_core.retrievers import BaseRetriever
 from langchain_core.vectorstores import InMemoryVectorStore
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from chapter4.document_loader import load_document
-from chapter4.llms import EMBEDDINGS
+from document_loader import load_document
+from llms import EMBEDDINGS
 
 VECTOR_STORE = InMemoryVectorStore(embedding=EMBEDDINGS)
 
 
-def split_documents(docs: List[Document]) -> list[Document]:
-    """Split each document."""
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1500, chunk_overlap=200
-    )
-    return text_splitter.split_documents(docs)
-
-
 class DocumentRetriever(BaseRetriever):
-    """A retriever that contains the top k documents that contain the user query."""
-    documents: List[Document] = []
-    k: int = 5
+    """A simple retriever that stores uploaded documents in an in-memory vector store."""
 
-    def model_post_init(self, ctx: Any) -> None:
-        self.store_documents(self.documents)
+    k: int = 4
 
-    @staticmethod
-    def store_documents(docs: List[Document]) -> None:
-        """Add documents to the vector store."""
-        splits = split_documents(docs)
-        VECTOR_STORE.add_documents(splits)
+    def __init__(self, k: int = 4, **kwargs: Any):
+        super().__init__(**kwargs)
+        self.k = k
+        self.documents: List[Document] = []
 
-    def add_uploaded_docs(self, uploaded_files):
-        """Add uploaded documents."""
-        docs = []
-        with tempfile.TemporaryDirectory() as temp_dir:
-            for file in uploaded_files:
-                temp_filepath = os.path.join(temp_dir, file.name)
-                # Write file content first
-                with open(temp_filepath, "wb") as f:
-                    f.write(file.getvalue())
-                # Load document AFTER file is closed
+    def store_documents(self, docs: List[Document]) -> None:
+        """Add docs to the vector store."""
+        if not docs:
+            return
+
+        # Split to improve retrieval quality
+        splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+        split_docs = splitter.split_documents(docs)
+
+        VECTOR_STORE.add_documents(split_docs)
+
+    def add_documents_from_uploads(self, uploaded_files: List[Any]) -> None:
+        """Load Streamlit uploaded files and add to vector store."""
+        docs: List[Document] = []
+
+        for file in uploaded_files:
+            # Save to temp file because many loaders want a file path
+            suffix = os.path.splitext(file.name)[-1]
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                tmp.write(file.getbuffer())
+                temp_filepath = tmp.name
+
+            try:
+                file_docs = load_document(temp_filepath)
+                docs.extend(file_docs)
+            except Exception as e:
+                print(f"Failed to load {file.name}: {e}")
+            finally:
                 try:
-                    docs.extend(load_document(temp_filepath))
-                except Exception as e:
-                    print(f"Failed to load {file.name}: {e}")
-                    continue
+                    os.remove(temp_filepath)
+                except Exception:
+                    pass
 
         self.documents.extend(docs)
         self.store_documents(docs)
 
     def _get_relevant_documents(
-            self, query: str, *, run_manager: CallbackManagerForRetrieverRun
+        self, query: str, *, run_manager: CallbackManagerForRetrieverRun
     ) -> List[Document]:
-        """Sync implementations for retriever."""
+        """Sync implementation for retriever."""
         if len(self.documents) == 0:
             return []
         return VECTOR_STORE.similarity_search(query=query, k=self.k)

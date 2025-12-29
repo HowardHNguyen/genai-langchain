@@ -1,3 +1,4 @@
+import os
 """Loading LLMs and Embeddings."""
 from langchain.embeddings import CacheBackedEmbeddings
 from langchain.storage import LocalFileStore
@@ -7,6 +8,9 @@ from langchain_openai import OpenAIEmbeddings
 from config import set_environment
 
 set_environment()
+
+# Ensure local cache directory exists (Streamlit Cloud uses an ephemeral FS)
+os.makedirs("./cache", exist_ok=True)
 
 chat_model = ChatGroq(
     model="llama-3.3-70b-versatile",

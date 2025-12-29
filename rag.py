@@ -13,118 +13,75 @@ Workflow Overview:
 5. Retrieve and append citations to the final document.
 6. Output the fully revised document with inline source citations.
 
-Note: More details on performance measurement and observability will be covered in Chapter 8.
-
+Note: More details on performance measurement and observability will be covered in section 8.
 """
-from typing import Annotated
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Annotated, List
 
 from langchain_core.documents import Document
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.constants import END
-from langgraph.graph import START, StateGraph, add_messages
-from typing_extensions import List, TypedDict
+from langgraph.graph import END, START, StateGraph
+from langgraph.graph.message import add_messages
 
-from chapter4.llms import chat_model
-from chapter4.retriever import DocumentRetriever
+from llms import chat_model
+from retriever import DocumentRetriever
 
-
-system_prompt = (
-    "You're a helpful AI assistant. Given a user question "
-    "and some corporate document snippets, write documentation. "
-    "If none of the documents is relevant to the question, "
-    "mention that there's no relevant document, and then "
-    "answer the question to the best of your knowledge."
-    "\n\nHere are the corporate documents: "
-    "{context}"
-)
-
-# Initialize the LangChain ChatGroq interface using the API key from environment variables.
 retriever = DocumentRetriever()
-prompt = ChatPromptTemplate.from_messages(
+
+
+@dataclass
+class State:
+    """State for LangGraph pipeline."""
+
+    messages: Annotated[List[BaseMessage], add_messages]
+    docs: List[Document] | None = None
+    answer: str | None = None
+
+
+PROMPT = ChatPromptTemplate.from_messages(
     [
-        ("system", system_prompt),
+        (
+            "system",
+            "You are a helpful corporate documentation assistant. "
+            "Use the provided context to answer the user and include citations when possible.",
+        ),
         ("human", "{question}"),
+        ("system", "Context:\n{context}"),
     ]
 )
 
 
-# Define state for application
-class State(TypedDict):
-    question: str
-    context: List[Document]
-    answer: str
-    issues_report: str
-    issues_detected: bool
-    messages: Annotated[list, add_messages]
+def retrieve(state: State) -> dict:
+    """Retrieve relevant documents based on the latest user message."""
+    question = state.messages[-1].content
+    retrieved_docs = retriever.invoke(question)
+    return {"docs": retrieved_docs}
 
 
-# Define application steps
-def retrieve(state: State):
-    retrieved_docs = retriever.invoke(state["messages"][-1].content)
-    print(retrieved_docs)
-    return {"context": retrieved_docs}
+def generate(state: State) -> dict:
+    """Generate an answer using retrieved docs."""
+    question = state.messages[-1].content
+    docs = state.docs or []
+    context = "\n\n".join([d.page_content for d in docs])
 
-
-def generate(state: State):
-    docs_content = "\n\n".join(doc.page_content for doc in state["context"])
-    messages = prompt.invoke(
-        {"question": state["messages"][-1].content, "context": docs_content}
-    )
-    response = chat_model.invoke(messages)
-    print(response.content)
+    chain = PROMPT | chat_model
+    response = chain.invoke({"question": question, "context": context})
     return {"answer": response.content}
 
 
-def double_check(state: State):
-    result = chat_model.invoke([{
-        "role": "user",
-        "content": (
-            f"Review the following project documentation for compliance with our corporate standards. "
-            f"Return 'ISSUES FOUND' followed by any issues detected or 'NO ISSUES': {state['answer']}"
-        )
-    }])
-    
-    # Extract actual response (after thinking block)
-    content = result.content
-    if "</think>" in content:
-        actual_response = content.split("</think>", 1)[1].strip()
-    else:
-        actual_response = content.strip()
-    
-    if "ISSUES FOUND" in actual_response:
-        print("issues detected")
-        return {
-            "issues_report": actual_response.split("ISSUES FOUND", 1)[1].strip(),
-            "issues_detected": True
-        }
-    print("no issues detected")
-    return {
-        "issues_report": "",
-        "issues_detected": False
-    }
+def double_check(state: State) -> dict:
+    """Placeholder for validation/compliance checking logic."""
+    # You can expand this later (policy checks, formatting, etc.).
+    return {}
 
 
-# NODE: doc_finalizer
-# Finalizes the documentation by incorporating feedback if available.
-def doc_finalizer(state: State):
-    """Finalize documentation by integrating human feedback."""
-    if "issues_detected" in state and state["issues_detected"]:
-        response = chat_model.invoke([{
-            "role": "user",
-            "content": (
-                f"Revise the following documentation to address these feedback points: {state['issues_report']}\n"
-                f"Original Document: {state['answer']}\n"
-                f"Always return the full revised document, even if no changes are needed."
-            )
-        }])
-        return {
-            "messages": [AIMessage(response.content)]
-        }
-    return {
-        "messages": [AIMessage(state["answer"])]
-    }
+def doc_finalizer(state: State) -> dict:
+    """Finalize and return the answer."""
+    return {"messages": [AIMessage(state["answer"])]}
 
 
 # Compile application and test
