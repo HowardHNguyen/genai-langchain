@@ -181,7 +181,11 @@ With further investment, this prototype can mature into a daily-use **Agentic Ma
 
 This is an **exploratory, internal prototype** intended to demonstrate feasibility, collect stakeholder feedback, and inform a broader Agentic AI strategy for Marketing.
 
-Enterprise-grade governance, access control, persistence, and integrations would be addressed prior to any production deployment.
+We evaluate this like an internal operations tool, not a chatbot.
+It’s reliable because it’s grounded in our own documents, consistent because it enforces our definitions, and useful because it reduces time spent searching and clarifying.
+The prototype proves the core loop works. The next step is governance, integration, and scale.
+
+- Enterprise-grade governance, access control, persistence, and integrations would be addressed prior to any production deployment.
         """
     )
 
