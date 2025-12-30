@@ -4,6 +4,7 @@ Run:
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 try:
     from langchain_core.messages import HumanMessage
@@ -12,6 +13,21 @@ except ImportError:
 
 from document_loader import DocumentLoader
 from rag import graph, config, retriever
+
+
+def render_mermaid(code: str, height: int = 620):
+    """Render Mermaid diagrams in Streamlit via an HTML component."""
+    mermaid_html = f"""
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+      mermaid.initialize({{ startOnLoad: true, theme: "default", securityLevel: "loose" }});
+    </script>
+    <div class="mermaid">
+    {code}
+    </div>
+    """
+    components.html(mermaid_html, height=height, scrolling=True)
+
 
 # Page config
 st.set_page_config(page_title="Marketing Operations AI Assistant (Agentic Prototype)", layout="wide")
@@ -235,73 +251,123 @@ with tab_arch:
 This application is built using a **modular, agentic architecture** designed for clarity, scalability, and enterprise evolution.
 
 Think of the system as **four layers**, moving from user interaction to intelligent response.
+        """
+    )
 
----
+    st.markdown("## Data Flow: Current Prototype (Ephemeral Only)")
+    render_mermaid(
+        """
+flowchart TD
+  %% Users + UI
+  U[Marketing Team Member] -->|Upload files + Ask questions| UI[Streamlit UI]
 
-### 1. User Interaction Layer (Front End)
+  %% Ephemeral Layer
+  subgraph E[Ephemeral (Prototype Runtime)]
+    direction TB
+    SS[Session State<br/>- uploaded_files<br/>- chat_history<br/>- rag_ready]
+    TMP[Temp Filesystem<br/>(tempfile in /tmp)<br/>short-lived]
+    PARSE[Document Parsing<br/>PDF/DOCX/TXT → text]
+    CHUNK[Chunking<br/>text → chunks]
+    EMB[Embeddings<br/>chunks → vectors]
+    VEC[In-Memory Vector Store<br/>(InMemoryVectorStore)]
+    RAG[RAG Pipeline<br/>Retrieve → Reason → Respond]
+  end
 
-**What happens here**
-- Users upload approved Marketing documents
-- Users ask questions in natural language
-- Responses are displayed in a chat-style interface
+  %% Flows
+  UI --> SS
+  UI -->|file bytes| TMP
+  TMP --> PARSE
+  PARSE --> CHUNK
+  CHUNK --> EMB
+  EMB --> VEC
+  UI -->|question| RAG
+  RAG -->|retrieve| VEC
+  RAG -->|answer| UI
 
-**Why it matters**
-- Simple, intuitive experience
-- No training required for business users
-- Designed for daily, repeat use
+  %% Cleanup
+  TMP -->|delete after parsing| X[Temp file removed]
+        """,
+        height=560,
+    )
 
----
+    st.markdown(
+        """
+**What this means (prototype behavior):**
+- Uploaded files are held in **session memory** and written briefly to a **temporary filesystem** for parsing.
+- The app stores **only embeddings and chunks in memory** for retrieval during the session.
+- When the app restarts or the session ends, the content is **not retained** (no persistence).
+        """
+    )
 
-### 2. Knowledge Ingestion & Indexing Layer
+    st.markdown("---")
+    st.markdown("## Data Flow: Production Evolution (Ephemeral + Persistent Layers)")
+    render_mermaid(
+        """
+flowchart TD
+  %% Users + UI
+  U[Marketing Team Member] -->|Ask questions| UI[Internal Web UI<br/>(Streamlit or Web App)]
+  UI -->|SSO| IDP[Identity Provider<br/>(Azure AD / Okta)]
 
-**What happens here**
-- Uploaded documents are parsed and cleaned
-- Long documents are split into smaller, meaningful sections
-- Each section is converted into a numerical representation (embedding)
-- These embeddings are stored in a searchable index
+  %% Ingestion Sources
+  SP[SharePoint / Confluence / Drive] -->|Scheduled Sync<br/>or On-Demand| ING[Ingestion Service]
+  MT[MarTech Tools<br/>(AJO/CJA/SFMC)] -->|Metadata + Taxonomy| ING
+  DW[Data Platforms<br/>(Snowflake/Databricks)] -->|Optional context| ING
 
-**Why it matters**
-- Allows the system to find the *right* information quickly
-- Prevents the AI from relying on generic knowledge
-- Keeps answers grounded in approved internal content
+  %% Ephemeral Processing
+  subgraph E[Ephemeral (Runtime Processing)]
+    direction TB
+    TMP[Temp Processing<br/>(parsing + chunking)]
+    PARSE[Parse + Clean]
+    CHUNK[Chunk + Normalize]
+    EMB[Embed]
+  end
 
----
+  %% Persistent Layer
+  subgraph P[Persistent (Enterprise Storage)]
+    direction TB
+    OBJ[Object Storage<br/>(Blob/S3)<br/>Optional raw docs]
+    META[Metadata Store<br/>(SQL/NoSQL)<br/>source, ACLs, timestamps]
+    VDB[Vector Store<br/>(Azure AI Search / Pinecone / Chroma / FAISS)]
+    AUD[Audit Logs<br/>who/what/when<br/>+ retrieval traces]
+  end
 
-### 3. Agentic Reasoning Layer (RAG Pipeline)
+  %% Serving + Governance
+  subgraph G[Serving + Governance]
+    direction TB
+    GW[API Gateway / Reverse Proxy<br/>TLS + Rate Limits]
+    RBAC[Access Control<br/>Enforce doc ACLs]
+    RAG[RAG Service<br/>Retrieve → Reason → Respond]
+  end
 
-This is the intelligence core of the system.
+  %% Flows: ingestion
+  ING --> TMP --> PARSE --> CHUNK --> EMB --> VDB
+  ING --> META
+  SP -->|Optional archival| OBJ
 
-**Step-by-step flow**
-1. **Retrieve**  
-   The system identifies the most relevant content from internal documents based on the user’s question.
+  %% Flows: serving
+  UI --> GW --> RAG
+  RAG --> RBAC
+  RBAC -->|filtered retrieval| VDB
+  RAG -->|answer + citations| UI
+  RAG --> AUD
+        """,
+        height=700,
+    )
 
-2. **Reason**  
-   A large language model interprets the question using both the user input and retrieved context.
+    st.markdown(
+        """
+**What this means (production-ready behavior):**
+- Parsing/chunking/embedding still happens **ephemerally**, but the organization intentionally chooses what to persist.
+- A persistent vector store enables **reliable, scalable retrieval** across sessions.
+- RBAC + audit logs enable **enterprise governance** (who accessed what, when, and based on which sources).
+- Integrations (SharePoint/Confluence/MarTech) shift ingestion from manual uploads to **managed knowledge pipelines**.
+        """
+    )
 
-3. **Respond**  
-   The system generates a clear, actionable answer aligned with Marketing standards.
+    st.markdown("---")
 
-**Why it matters**
-- Reduces hallucination risk
-- Improves trust and adoption
-- Enables future multi-step, tool-using agents
-
----
-
-### 4. Language Model Layer
-
-**What happens here**
-- A high-performance LLM generates responses
-- The model is constrained by retrieved internal context
-- Outputs are shaped for business readability
-
-**Why it matters**
-- Fast, conversational experience
-- Flexibility to swap or upgrade models over time
-- Cost and performance optimization options
-
----
-
+    st.markdown(
+        """
 ### Current prototype vs. production evolution
 
 **Today (Prototype)**
@@ -325,7 +391,6 @@ This is the intelligence core of the system.
 - Agent-ready: designed to expand beyond Q&A into workflow automation
 
 This architecture provides a **safe, flexible foundation** for introducing Agentic AI into Marketing operations without disrupting existing enterprise platforms.
-
         """
     )
 
