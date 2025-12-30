@@ -258,34 +258,31 @@ Think of the system as **four layers**, moving from user interaction to intellig
     render_mermaid(
         """
 flowchart TD
-  %% Users + UI
-  U[Marketing Team Member] -->|Upload files + Ask questions| UI[Streamlit UI]
+  U[Marketing Team Member] --> UI[Streamlit UI]
 
-  %% Ephemeral Layer
-  subgraph E[Ephemeral (Prototype Runtime)]
-    direction TB
-    SS[Session State<br/>- uploaded_files<br/>- chat_history<br/>- rag_ready]
-    TMP[Temp Filesystem<br/>(tempfile in /tmp)<br/>short-lived]
-    PARSE[Document Parsing<br/>PDF/DOCX/TXT → text]
-    CHUNK[Chunking<br/>text → chunks]
-    EMB[Embeddings<br/>chunks → vectors]
-    VEC[In-Memory Vector Store<br/>(InMemoryVectorStore)]
-    RAG[RAG Pipeline<br/>Retrieve → Reason → Respond]
+  subgraph EPHEMERAL[EPHEMERAL - Prototype Runtime]
+    SS[Session State: uploaded_files, chat_history, rag_ready]
+    TMP[Temporary Filesystem: /tmp (short lived)]
+    PARSE[Parse Documents: PDF, DOCX, TXT to text]
+    CHUNK[Chunk Text]
+    EMB[Create Embeddings]
+    VEC[Vector Store: In Memory]
+    RAG[RAG Pipeline: Retrieve -> Reason -> Respond]
   end
 
-  %% Flows
   UI --> SS
-  UI -->|file bytes| TMP
+  UI --> TMP
   TMP --> PARSE
   PARSE --> CHUNK
   CHUNK --> EMB
   EMB --> VEC
-  UI -->|question| RAG
-  RAG -->|retrieve| VEC
-  RAG -->|answer| UI
 
-  %% Cleanup
-  TMP -->|delete after parsing| X[Temp file removed]
+  UI --> RAG
+  RAG --> VEC
+  RAG --> UI
+
+  TMP --> DEL[Temp file deleted]
+
         """,
         height=560,
     )
@@ -304,52 +301,42 @@ flowchart TD
     render_mermaid(
         """
 flowchart TD
-  %% Users + UI
-  U[Marketing Team Member] -->|Ask questions| UI[Internal Web UI<br/>(Streamlit or Web App)]
-  UI -->|SSO| IDP[Identity Provider<br/>(Azure AD / Okta)]
+  U[Marketing Team Member] --> UI[Internal Web UI]
+  UI --> IDP[SSO: Azure AD or Okta]
 
-  %% Ingestion Sources
-  SP[SharePoint / Confluence / Drive] -->|Scheduled Sync<br/>or On-Demand| ING[Ingestion Service]
-  MT[MarTech Tools<br/>(AJO/CJA/SFMC)] -->|Metadata + Taxonomy| ING
-  DW[Data Platforms<br/>(Snowflake/Databricks)] -->|Optional context| ING
+  SP[SharePoint / Confluence / Drive] --> ING[Ingestion Service]
+  MT[MarTech Tools: AJO, CJA, SFMC] --> ING
+  DW[Data Platforms: Snowflake, Databricks] --> ING
 
-  %% Ephemeral Processing
-  subgraph E[Ephemeral (Runtime Processing)]
-    direction TB
-    TMP[Temp Processing<br/>(parsing + chunking)]
-    PARSE[Parse + Clean]
-    CHUNK[Chunk + Normalize]
+  subgraph PROC[EPHEMERAL - Runtime Processing]
+    TMP[Temp Processing]
+    PARSE[Parse and Clean]
+    CHUNK[Chunk and Normalize]
     EMB[Embed]
   end
 
-  %% Persistent Layer
-  subgraph P[Persistent (Enterprise Storage)]
-    direction TB
-    OBJ[Object Storage<br/>(Blob/S3)<br/>Optional raw docs]
-    META[Metadata Store<br/>(SQL/NoSQL)<br/>source, ACLs, timestamps]
-    VDB[Vector Store<br/>(Azure AI Search / Pinecone / Chroma / FAISS)]
-    AUD[Audit Logs<br/>who/what/when<br/>+ retrieval traces]
+  subgraph STORE[PERSISTENT - Enterprise Storage]
+    OBJ[Object Storage (optional): Blob or S3]
+    META[Metadata Store: source, ACL, timestamps]
+    VDB[Vector Store: Azure AI Search or similar]
+    AUD[Audit Logs: who/what/when]
   end
 
-  %% Serving + Governance
-  subgraph G[Serving + Governance]
-    direction TB
-    GW[API Gateway / Reverse Proxy<br/>TLS + Rate Limits]
-    RBAC[Access Control<br/>Enforce doc ACLs]
-    RAG[RAG Service<br/>Retrieve → Reason → Respond]
+  subgraph SERVE[SERVING + GOVERNANCE]
+    GW[Gateway / Reverse Proxy: TLS, rate limits]
+    RBAC[Access Control: enforce ACL]
+    RAG[RAG Service: Retrieve -> Reason -> Respond]
   end
 
-  %% Flows: ingestion
   ING --> TMP --> PARSE --> CHUNK --> EMB --> VDB
   ING --> META
-  SP -->|Optional archival| OBJ
+  SP --> OBJ
 
-  %% Flows: serving
   UI --> GW --> RAG
-  RAG --> RBAC
-  RBAC -->|filtered retrieval| VDB
-  RAG -->|answer + citations| UI
+  RAG --> RBAC --> VDB
+  RAG --> UI
   RAG --> AUD
+
         """,
         height=700,
     )
