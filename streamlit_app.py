@@ -17,8 +17,8 @@ from rag import graph, config, retriever
 # =========================
 # Page config
 # =========================
-st.set_page_config(page_title="Marketing Operations AI Assistant (Agentic Prototype)", layout="wide")
-st.title("📚 Marketing Operations AI Assistant (Agentic Prototype)")
+st.set_page_config(page_title="Agentic AI Knowledge Platform (RAG + Workflows)", layout="wide")
+st.title("📚 Agentic AI Knowledge Platform (RAG + Workflows)")
 
 
 # =========================
@@ -119,76 +119,81 @@ with tab_about:
 
     st.markdown(
         """
-This application is a **Marketing Operations AI Assistant (Agentic Prototype)** designed to help Marketing teams work faster, more consistently, and with greater confidence by grounding AI responses in **our internal documentation, standards, and operating model**.
+## Agentic AI Knowledge Platform (RAG + Workflows)
 
-It is **not a replacement for Microsoft Copilot**.  
-Instead, it complements Copilot by focusing on **marketing-specific knowledge and workflows** that generic enterprise AI tools do not reliably capture.
+This application is an **Agentic AI Knowledge Platform** designed to demonstrate how large language models (LLMs) can be safely and effectively embedded into enterprise environments using **retrieval-augmented generation (RAG)** and **human-in-the-loop workflows**.
 
----
-
-### Why this matters
-
-Marketing organizations often struggle with:
-- Inconsistent definitions (KPIs, attribution, lifecycle stages)
-- Knowledge spread across decks, PDFs, playbooks, and SOPs
-- Repeated questions about “how we do things here”
-- Time lost translating strategy into execution details
-
-This assistant addresses those gaps by acting as a **single, trusted intelligence layer** over approved Marketing content.
+Rather than functioning as a generic chatbot, the platform grounds AI reasoning in **trusted internal knowledge sources**, enabling consistent, explainable, and auditable outputs aligned with organizational standards.
 
 ---
 
-### What this assistant does today
+### What this platform demonstrates
 
-- Ingests internal marketing documents (guidelines, frameworks, playbooks)
-- Retrieves the most relevant content based on user questions
-- Generates answers **grounded in internal sources**, reducing hallucination
-- Helps users:
-  - Clarify definitions and operating rules
-  - Summarize policies and standards
-  - Draft internal-ready artifacts (briefs, checklists, SOPs)
+This prototype showcases a reusable **agentic AI architecture** that can be applied across business domains.  
+In the current implementation, **Marketing Operations** is used as a reference use case, but the underlying design is **domain-agnostic**.
 
-This prototype demonstrates the **core agentic loop**:  
-**Retrieve → Reason → Respond**, using our content as the source of truth.
+Core capabilities demonstrated include:
+- Retrieval of relevant enterprise knowledge prior to reasoning (RAG)
+- Context-aware responses constrained to approved sources
+- Clear separation between ephemeral processing and persistent knowledge layers
+- A foundation for evolving AI from **answers** to **assisted workflows**
 
 ---
 
-### How this complements Microsoft Copilot
+### Why this matters for enterprises
 
-Microsoft Copilot excels at:
-- General productivity
-- Cross-tool assistance (Outlook, Teams, PowerPoint, Excel)
-- Broad language understanding
+Organizations increasingly face:
+- Knowledge fragmentation across documents, wikis, and platforms
+- Inconsistent definitions of metrics, standards, and processes
+- Low trust in AI due to hallucinations and lack of traceability
+- Difficulty moving from AI experiments to operational value
 
-This assistant focuses on:
-- Marketing-specific standards and definitions
-- Operational consistency and governance
-- Domain-aware reasoning tied to how Marketing actually operates
-
-Together, they form a layered model:
-- **Copilot** → general enterprise productivity  
-- **Marketing Operations AI Assistant** → domain-specific enablement and intelligence
+This platform addresses these challenges by positioning AI as a **knowledge interpreter and workflow assistant**, not an autonomous decision maker.
 
 ---
 
-### What this can evolve into
+### How this differs from general AI assistants
 
-With further investment, this prototype can mature into a daily-use **Agentic Marketing Enablement Tool**, capable of:
-- Assisting campaign setup and QA
-- Enforcing standards at execution time
-- Supporting analytics interpretation and experimentation design
-- Powering guided workflows (e.g., “create a campaign brief”, “validate a launch checklist”)
-- Integrating with MarTech, analytics, and data platforms
+This platform is **not a replacement for tools like Microsoft Copilot**.
+
+Instead:
+- General AI assistants focus on broad productivity and cross-application tasks
+- This platform focuses on **domain-specific knowledge, governance, and operational consistency**
+
+Together, they form a layered AI strategy:
+- **General AI assistants** → productivity and communication  
+- **Agentic AI Knowledge Platform** → trusted reasoning over enterprise knowledge
+
+---
+
+### What the platform does today
+
+- Ingests internal documents (PDF, DOCX, TXT)
+- Indexes content for semantic retrieval
+- Answers questions grounded strictly in provided knowledge
+- Demonstrates the **Retrieve → Reason → Respond** agentic loop
+- Operates with session-scoped data for safety and experimentation
+
+---
+
+### How this evolves beyond the prototype
+
+The architecture is intentionally designed to evolve into a production-grade platform with:
+- Persistent vector storage and metadata management
+- Enterprise authentication and role-based access control
+- Audit logging and usage observability
+- Integration with systems such as SharePoint, Confluence, and MarTech tools
+- Agentic workflows that assist with drafting, validation, and execution — always with human approval
 
 ---
 
 ### Important note
 
-This is an **exploratory, internal prototype** intended to demonstrate feasibility, collect stakeholder feedback, and inform a broader Agentic AI strategy for Marketing.
+This is an **exploratory prototype** intended to demonstrate architectural patterns, validate agentic AI concepts, and support stakeholder review.
 
-We evaluate this like an internal operations tool, not a chatbot. It’s reliable because it’s grounded in our own documents, consistent because it enforces our definitions, and useful because it reduces time spent searching and clarifying.
+It is evaluated as an **internal enablement platform**, not a consumer chatbot.  
+Production deployment would include additional governance, security, and compliance controls aligned with enterprise requirements.
 
-Enterprise-grade governance, access control, persistence, and integrations would be addressed prior to any production deployment.
         """
     )
 
@@ -200,30 +205,74 @@ with tab_howto:
 
     st.markdown(
         """
-### Quick start
-1. **Upload** your docs (PDF, TXT, DOCX, etc.)
-2. Click **Build Knowledge Base**
-3. Ask questions in the chat
+## How to use the platform
 
-### Best practices (for stronger answers)
-- Ask **specific questions** (e.g., “What is our definition of MQL?” vs “Explain MQL”)
-- Provide context in your question: channel, market, product line, timeframe
-- If you want a specific output format, request it (e.g., “Answer as a checklist”)
+This platform is designed to support both **knowledge discovery** and **workflow acceleration**.
 
-### Example questions
-- “Summarize our modern marketing operations framework in 10 bullets.”
-- “What does our guideline say about attribution models and limitations?”
-- “Draft a campaign brief template aligned with our definitions.”
-- “Create a QA checklist for email + paid social launch based on our standards.”
+---
 
-### Limitations (current prototype)
-- The knowledge base is built from **uploaded docs only** (not yet connected to Drive/Confluence/SharePoint)
-- Citations are not shown as clickable sources yet (can be added next)
-- Index is stored in memory per session (can be upgraded to persistent storage)
+### Step 1 — Provide trusted knowledge
 
-### Data handling note
-Avoid uploading restricted or highly sensitive documents until we add governance controls:
-access control, audit logs, encryption, and retention policies.
+Upload internal documents such as:
+- Guidelines and standards
+- Playbooks and SOPs
+- Frameworks and reference materials
+
+These documents become the **source of truth** the AI reasons over.
+
+---
+
+### Step 2 — Build the knowledge index
+
+Click **Build Knowledge Base** to:
+- Parse and normalize content
+- Create semantic embeddings
+- Prepare the platform for retrieval-based reasoning
+
+This step simulates how enterprise ingestion pipelines would work in production.
+
+---
+
+### Step 3 — Ask questions or initiate workflows
+
+Use natural language to:
+- Clarify definitions and standards  
+  *“What is our definition of MQL?”*
+- Summarize or interpret guidance  
+  *“Summarize our attribution framework and limitations.”*
+- Generate draft artifacts  
+  *“Draft a campaign brief aligned with our standards.”*
+- Validate decisions  
+  *“Create a QA checklist for this launch.”*
+
+---
+
+### Best practices for deeper results
+
+- Ask **context-rich questions** (role, channel, market, timeframe)
+- Specify the desired output format (bullets, checklist, summary)
+- Treat outputs as **drafts** for review and approval
+
+---
+
+### Current limitations (intentional)
+
+- Knowledge is session-scoped (no persistence yet)
+- Manual upload is used instead of automated ingestion
+- Workflow outputs are draft-only
+
+These constraints keep the prototype safe while validating value.
+
+---
+
+### Production vision
+
+In production, these interactions evolve into:
+- Guided workflows with approvals
+- Write-back to enterprise systems
+- Role-aware assistance
+- Measurable productivity gains
+
         """
     )
 
@@ -235,7 +284,32 @@ with tab_arch:
 
     st.markdown(
         """
-Below are two diagrams describing how data flows through the system today (prototype) and how it would look in a production-ready enterprise deployment.
+The Agentic AI Knowledge Platform is built on a **modular, enterprise-oriented architecture** designed to support a clear evolution from rapid experimentation to governed, production-scale deployment.
+
+The two diagrams below illustrate this progression:
+
+1. **Current Prototype (Ephemeral Only)** — optimized for speed, safety, and iteration  
+2. **Production Evolution (Ephemeral + Persistent Layers)** — optimized for trust, scale, and governance
+
+Together, they show how the platform moves from a proof-of-capability into a durable enterprise system without architectural rework.
+
+### Data Flow: Current Prototype (Ephemeral Only)
+
+This diagram represents the **current state of the platform**, intentionally designed to be lightweight, low-risk, and fast to iterate.
+
+Key characteristics:
+- All document processing (parsing, chunking, embedding) happens **ephemerally at runtime**
+- Uploaded content exists only in **session memory** and temporary storage
+- No files, embeddings, or chat history persist across restarts
+- The AI reasons **only over content explicitly provided by the user**
+
+This design allows stakeholders to safely evaluate:
+- The quality of retrieval-augmented reasoning
+- The usefulness of responses for real business questions
+- The agentic interaction pattern (Retrieve → Reason → Respond)
+
+without introducing data retention, access, or governance risk.
+
         """
     )
 
@@ -243,8 +317,8 @@ Below are two diagrams describing how data flows through the system today (proto
 
     diagram_ephemeral = r"""
 +------------------------+        +-------------------------+
-| Marketing Team Member  |        |       Streamlit UI      |
-| (upload + ask)         |------->|  upload + chat interface|
+|     Ops Team Member    |        |       Streamlit UI      |
+|     (upload + ask)     |------->|  upload + chat interface|
 +------------------------+        +-----------+-------------+
                                             |
                                             | (session state)
@@ -292,19 +366,39 @@ Notes:
 
     st.markdown(
         """
-**What this means (prototype behavior):**
-- Uploaded files are held in session memory and written briefly to a temporary filesystem for parsing.
-- The app stores only embeddings and chunks in memory for retrieval during the session.
-- When the app restarts or the session ends, the content is not retained (no persistence).
+**Why this design matters**
+
+The ephemeral prototype establishes confidence in three critical areas:
+- **Accuracy** — responses are grounded in known sources
+- **Consistency** — definitions and standards are interpreted uniformly
+- **Trust** — the system does not retain or reuse data unintentionally
+
+This ensures the platform is evaluated as an **internal enablement tool**, not a black-box chatbot.
         """
     )
 
     st.divider()
+
+    st.markdown(
+"""
+### Data Flow: Production Evolution (Ephemeral + Persistent Layers)
+
+This diagram illustrates the **target production architecture**, where the same agentic reasoning pattern is preserved while introducing enterprise-grade capabilities.
+
+The key architectural shift is **intentional persistence**:
+- Knowledge is stored deliberately
+- Access is governed explicitly
+- Usage is observable and auditable
+
+Importantly, ephemeral processing remains — it is complemented, not replaced, by persistent layers.
+"""
+    )
+
     st.subheader("Data Flow: Production Evolution (Ephemeral + Persistent Layers)")
 
     diagram_production = r"""
 +------------------------+      +---------------------+      +----------------------+
-| Marketing Team Member  |----->| Internal Web UI     |----->| SSO / Identity (IdP) |
+|     Ops Team Member    |----->| Internal Web UI     |----->| SSO / Identity (IdP) |
 +------------------------+      +----------+----------+      +----------------------+
                                           |
                                           v
@@ -362,11 +456,44 @@ Also:
 
     st.markdown(
         """
-**What this means (production-ready behavior):**
-- Parsing/chunking/embedding still happens ephemerally, but the organization intentionally chooses what to persist.
-- Persistent vector storage enables reliable, scalable retrieval across sessions.
-- SSO + access control + audit logs enable enterprise governance and traceability.
-- Integrations shift ingestion from manual uploads to managed knowledge pipelines.
+**What changes in the production architecture**
+
+In a production deployment, the platform introduces:
+
+- **Persistent vector storage**  
+  Enables reliable retrieval across sessions and users
+
+- **Metadata and ownership tracking**  
+  Associates knowledge with source systems, timestamps, and stewardship
+
+- **Enterprise identity and access control**  
+  Ensures users only retrieve content they are authorized to see
+
+- **Audit and observability layers**  
+  Capture who asked what, when, and based on which sources
+
+- **Managed ingestion pipelines**  
+  Shift from manual uploads to systems such as SharePoint or Confluence
+
+### From knowledge assistance to agentic workflows
+
+With this architecture in place, the platform can evolve beyond Q&A into **agentic, human-in-the-loop workflows**, such as:
+- Drafting campaign briefs and SOPs
+- Generating QA and compliance checklists
+- Validating decisions against standards
+- Assisting execution while preserving human approval
+
+This progression enables AI to move from **informational support** to **operational acceleration** — without sacrificing trust or governance.
+
+### Executive takeaway
+
+The architecture demonstrates a deliberate progression:
+- Start ephemeral to prove value safely
+- Add persistence to scale knowledge reliably
+- Introduce governance to enable enterprise adoption
+- Extend into workflows to unlock productivity gains
+
+This approach allows the organization to adopt agentic AI **incrementally, responsibly, and with measurable impact**.
         """
     )
 
