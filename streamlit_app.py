@@ -4,6 +4,7 @@ Run:
 """
 
 import uuid
+import textwrap
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -18,21 +19,23 @@ from rag import graph, config, retriever
 
 def render_mermaid(code: str, height: int = 650):
     """
-    Robust Mermaid rendering in Streamlit by compiling Mermaid -> SVG using mermaidAPI.render().
-    This avoids flaky auto-init behavior inside iframes and surfaces real parse errors if any.
+    Robust Mermaid rendering in Streamlit.
+    Key fix: dedent + trim whitespace before rendering.
     """
     diagram_id = f"m_{uuid.uuid4().hex}"
 
-    # NOTE: Keep the diagram code inside a JS template literal to preserve newlines.
+    # 🔑 CRITICAL FIX
+    clean_code = textwrap.dedent(code).strip()
+
     html = f"""
-    <div id="{diagram_id}" style="font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;">
+    <div id="{diagram_id}" style="font-family: system-ui;">
       Rendering diagram...
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <script>
       (function() {{
-        const code = `{code}`;
+        const code = `{clean_code}`;
 
         mermaid.initialize({{
           startOnLoad: false,
@@ -46,10 +49,9 @@ def render_mermaid(code: str, height: int = 650):
             document.getElementById("{diagram_id}").innerHTML = result.svg;
           }});
         }} catch (e) {{
-          const msg = (e && e.message) ? e.message : String(e);
           document.getElementById("{diagram_id}").innerHTML =
-            "<pre style='color:#b00020; white-space:pre-wrap; line-height:1.25;'>" +
-            "Mermaid render error:\\n" + msg +
+            "<pre style='color:#b00020; white-space:pre-wrap;'>" +
+            "Mermaid error:\\n" + e.message +
             "\\n\\nDiagram text:\\n" + code +
             "</pre>";
         }}
@@ -59,11 +61,18 @@ def render_mermaid(code: str, height: int = 650):
     components.html(html, height=height, scrolling=True)
 
 
+# =========================
 # Page config
-st.set_page_config(page_title="Marketing Operations AI Assistant (Agentic Prototype)", layout="wide")
+# =========================
+st.set_page_config(
+    page_title="Marketing Operations AI Assistant (Agentic Prototype)",
+    layout="wide"
+)
 st.title("📚 Marketing Operations AI Assistant (Agentic Prototype)")
 
+# =========================
 # Session state
+# =========================
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "uploaded_files" not in st.session_state:
@@ -71,7 +80,9 @@ if "uploaded_files" not in st.session_state:
 if "rag_ready" not in st.session_state:
     st.session_state.rag_ready = False
 
+# =========================
 # Tabs
+# =========================
 tab_chat, tab_about, tab_howto, tab_arch = st.tabs(
     ["💬 Chat", "ℹ️ About this app", "🧭 How to use / guideline", "🏗️ Architecture & Technical Details"]
 )
@@ -97,10 +108,10 @@ with tab_chat:
                 st.markdown(user_input)
 
             if not st.session_state.rag_ready:
-                assistant_response = "Please upload documents first, then click **Build Knowledge Base**."
-                st.session_state.chat_history.append({"role": "assistant", "content": assistant_response})
+                reply = "Please upload documents first, then click **Build Knowledge Base**."
+                st.session_state.chat_history.append({"role": "assistant", "content": reply})
                 with st.chat_message("assistant"):
-                    st.markdown(assistant_response)
+                    st.markdown(reply)
             else:
                 with st.chat_message("assistant"):
                     with st.spinner("Thinking..."):
@@ -108,25 +119,24 @@ with tab_chat:
                             {"messages": [HumanMessage(content=user_input)]},
                             config=config,
                         )
-                        final_message = result["messages"][-1].content
-                        st.markdown(final_message)
-
-                st.session_state.chat_history.append({"role": "assistant", "content": final_message})
+                        answer = result["messages"][-1].content
+                        st.markdown(answer)
+                st.session_state.chat_history.append({"role": "assistant", "content": answer})
 
     with col2:
         st.subheader("Document Management")
 
-        uploaded_files = st.file_uploader(
+        uploads = st.file_uploader(
             "Upload Documents",
             type=list(DocumentLoader.supported_extensions),
             accept_multiple_files=True,
         )
 
-        if uploaded_files:
-            existing_names = {f.name for f in st.session_state.uploaded_files}
-            for file in uploaded_files:
-                if file.name not in existing_names:
-                    st.session_state.uploaded_files.append(file)
+        if uploads:
+            existing = {f.name for f in st.session_state.uploaded_files}
+            for f in uploads:
+                if f.name not in existing:
+                    st.session_state.uploaded_files.append(f)
 
         st.write("### Uploaded Files")
         if st.session_state.uploaded_files:
@@ -137,12 +147,12 @@ with tab_chat:
 
         if st.button("Build Knowledge Base"):
             if not st.session_state.uploaded_files:
-                st.warning("Please upload at least one document first.")
+                st.warning("Please upload documents first.")
             else:
                 with st.spinner("Indexing documents..."):
                     retriever.add_documents_from_uploads(st.session_state.uploaded_files)
                     st.session_state.rag_ready = True
-                st.success("Knowledge base is ready! You can now ask questions.")
+                st.success("Knowledge base ready.")
 
         if st.button("Clear Session"):
             st.session_state.chat_history = []
@@ -268,119 +278,58 @@ access control, audit logs, encryption, and retention policies.
 
 # =========================
 # TAB 4: ARCHITECTURE
-# =========================
+# =========================# 
 with tab_arch:
     st.header("Architecture & Technical Details")
 
-    st.markdown(
-        """
-This application is built using a **modular, agentic architecture** designed for clarity, scalability, and enterprise evolution.
-
-Think of the system as layered from user interaction to intelligent response, with clear separation between **ephemeral (prototype runtime)** and **persistent (enterprise-grade)** storage.
-        """
-    )
-
     st.subheader("Data Flow: Current Prototype (Ephemeral Only)")
-    render_mermaid(
-        """
+    render_mermaid("""
 flowchart TD
-  A[Marketing Team Member] --> B[Streamlit UI]
-  B --> C[Session Memory: uploaded_files, chat_history, rag_ready]
-  B --> D[Temp File in /tmp (short lived)]
-  D --> E[Parse to Text: PDF, DOCX, TXT]
-  E --> F[Chunk Text]
-  F --> G[Create Embeddings]
-  G --> H[Vector Store: In Memory]
-  B --> I[Ask Question]
-  I --> J[RAG: Retrieve and Answer]
-  J --> H
-  J --> B
-  D --> K[Delete Temp File]
-        """,
-        height=560,
-    )
+A[Marketing Team Member] --> B[Streamlit UI]
+B --> C[Session Memory]
+B --> D[Temp File in /tmp]
+D --> E[Parse Documents]
+E --> F[Chunk Text]
+F --> G[Create Embeddings]
+G --> H[In-Memory Vector Store]
+B --> I[Ask Question]
+I --> J[RAG Pipeline]
+J --> H
+J --> B
+D --> K[Delete Temp File]
+""", height=520)
 
-    st.markdown(
-        """
-**What this means (prototype behavior):**
-- Uploaded files are held in **session memory** and written briefly to a **temporary filesystem** for parsing.
-- The app stores **only embeddings and chunks in memory** for retrieval during the session.
-- When the app restarts or the session ends, the content is **not retained** (no persistence).
-        """
-    )
-
-    st.markdown("---")
-    st.subheader("Data Flow: Production Evolution (Ephemeral + Persistent Layers)")
-    render_mermaid(
-        """
+    st.subheader("Data Flow: Production Evolution (Ephemeral + Persistent)")
+    render_mermaid("""
 flowchart TD
-  A[Marketing Team Member] --> B[Internal Web UI]
-  B --> C[SSO: Azure AD or Okta]
+A[Marketing Team Member] --> B[Internal Web UI]
+B --> C[SSO]
 
-  S[SharePoint or Confluence or Drive] --> I[Ingestion Service]
-  M[MarTech Tools: AJO, CJA, SFMC] --> I
-  D[Data Platforms: Snowflake, Databricks] --> I
+S[SharePoint / Confluence / Drive] --> I[Ingestion Service]
+M[MarTech Tools] --> I
+D[Data Platforms] --> I
 
-  I --> P[Parse and Clean]
-  P --> Q[Chunk and Normalize]
-  Q --> R[Embed]
-  R --> V[Persistent Vector Store: Azure AI Search or similar]
+I --> P[Parse and Clean]
+P --> Q[Chunk]
+Q --> R[Embed]
+R --> V[Persistent Vector Store]
 
-  B --> G[Gateway or Reverse Proxy: TLS, rate limits]
-  G --> H[RAG Service: Retrieve and Answer]
-  H --> X[Access Control: enforce ACL]
-  X --> V
-  H --> B
-  H --> L[Audit Logs: who, what, when]
-        """,
-        height=650,
-    )
+B --> G[Gateway]
+G --> H[RAG Service]
+H --> X[Access Control]
+X --> V
+H --> B
+H --> L[Audit Logs]
+""", height=600)
 
-    st.markdown(
-        """
-**What this means (production-ready behavior):**
-- Parsing/chunking/embedding still happens **ephemerally**, but the organization intentionally chooses what to persist.
-- A persistent vector store enables **reliable, scalable retrieval** across sessions.
-- SSO + access control + audit logs enable **enterprise governance** (who accessed what, when, and based on which sources).
-- Integrations shift ingestion from manual uploads to **managed knowledge pipelines**.
-        """
-    )
-
-    st.markdown("---")
-    st.markdown(
-        """
-### Current prototype vs. production evolution
-
-**Today (Prototype)**
-- In-memory knowledge index
-- Session-based usage
-- Manual document upload
-
-**Future (Production-ready)**
-- Persistent vector storage
-- Role-based access control
-- Source citations and traceability
-- Integration with enterprise systems (SharePoint, Confluence, Drive, MarTech tools)
-- Observability (usage, cost, quality metrics)
-
----
-
-### Why this architecture was chosen
-
-- Modular: each layer can evolve independently
-- Enterprise-aligned: supports governance and scale
-- Agent-ready: designed to expand beyond Q&A into workflow automation
-
-This architecture provides a **safe, flexible foundation** for introducing Agentic AI into Marketing operations without disrupting existing enterprise platforms.
-        """
-    )
-
+# =========================
 # Footer
+# =========================
 st.markdown(
     """
-<hr style="margin-top:32px;margin-bottom:8px;">
+<hr>
 <div style="text-align:center;font-size:12px;color:gray;">
-  © 2025 Howard Nguyen, PhD. For prototype and demonstration only.
+© 2025 Howard Nguyen, PhD. Prototype for internal demonstration only.
 </div>
 """,
     unsafe_allow_html=True,
