@@ -19,7 +19,7 @@ from rag import graph, config, retriever
 # =========================
 st.set_page_config(page_title="Agentic AI Knowledge Platform (RAG + Workflows)", layout="wide")
 st.title("📚 Agentic AI Knowledge Platform (RAG + Workflows)")
-
+st.subheader("By Howard Nguyen - For Prototype and Demonstration")
 
 # =========================
 # Session state
