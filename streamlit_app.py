@@ -3,6 +3,7 @@ Run:
   streamlit run streamlit_app.py
 """
 
+import uuid
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -15,18 +16,47 @@ from document_loader import DocumentLoader
 from rag import graph, config, retriever
 
 
-def render_mermaid(code: str, height: int = 620):
-    """Render Mermaid diagrams in Streamlit via an HTML component."""
-    mermaid_html = f"""
+def render_mermaid(code: str, height: int = 650):
+    """
+    Robust Mermaid rendering in Streamlit by compiling Mermaid -> SVG using mermaidAPI.render().
+    This avoids flaky auto-init behavior inside iframes and surfaces real parse errors if any.
+    """
+    diagram_id = f"m_{uuid.uuid4().hex}"
+
+    # NOTE: Keep the diagram code inside a JS template literal to preserve newlines.
+    html = f"""
+    <div id="{diagram_id}" style="font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;">
+      Rendering diagram...
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <script>
-      mermaid.initialize({{ startOnLoad: true, theme: "default", securityLevel: "loose" }});
+      (function() {{
+        const code = `{code}`;
+
+        mermaid.initialize({{
+          startOnLoad: false,
+          theme: "neutral",
+          securityLevel: "loose"
+        }});
+
+        try {{
+          mermaid.parse(code);
+          mermaid.mermaidAPI.render("{diagram_id}_svg", code).then((result) => {{
+            document.getElementById("{diagram_id}").innerHTML = result.svg;
+          }});
+        }} catch (e) {{
+          const msg = (e && e.message) ? e.message : String(e);
+          document.getElementById("{diagram_id}").innerHTML =
+            "<pre style='color:#b00020; white-space:pre-wrap; line-height:1.25;'>" +
+            "Mermaid render error:\\n" + msg +
+            "\\n\\nDiagram text:\\n" + code +
+            "</pre>";
+        }}
+      }})();
     </script>
-    <div class="mermaid">
-    {code}
-    </div>
     """
-    components.html(mermaid_html, height=height, scrolling=True)
+    components.html(html, height=height, scrolling=True)
 
 
 # Page config
@@ -41,7 +71,7 @@ if "uploaded_files" not in st.session_state:
 if "rag_ready" not in st.session_state:
     st.session_state.rag_ready = False
 
-# ---- Tabs ----
+# Tabs
 tab_chat, tab_about, tab_howto, tab_arch = st.tabs(
     ["💬 Chat", "ℹ️ About this app", "🧭 How to use / guideline", "🏗️ Architecture & Technical Details"]
 )
@@ -56,10 +86,8 @@ with tab_chat:
         st.subheader("Chat Interface")
 
         for msg in st.session_state.chat_history:
-            role = msg["role"]
-            content = msg["content"]
-            with st.chat_message(role):
-                st.markdown(content)
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
 
         user_input = st.chat_input("Ask a question about your documents...")
 
@@ -197,11 +225,9 @@ With further investment, this prototype can mature into a daily-use **Agentic Ma
 
 This is an **exploratory, internal prototype** intended to demonstrate feasibility, collect stakeholder feedback, and inform a broader Agentic AI strategy for Marketing.
 
-We evaluate this like an internal operations tool, not a chatbot.
-It’s reliable because it’s grounded in our own documents, consistent because it enforces our definitions, and useful because it reduces time spent searching and clarifying.
-The prototype proves the core loop works. The next step is governance, integration, and scale.
+We evaluate this like an internal operations tool, not a chatbot. It’s reliable because it’s grounded in our own documents, consistent because it enforces our definitions, and useful because it reduces time spent searching and clarifying.
 
-- Enterprise-grade governance, access control, persistence, and integrations would be addressed prior to any production deployment.
+Enterprise-grade governance, access control, persistence, and integrations would be addressed prior to any production deployment.
         """
     )
 
@@ -230,7 +256,7 @@ with tab_howto:
 - “Create a QA checklist for email + paid social launch based on our standards.”
 
 ### Limitations (current prototype)
-- The knowledge base is built from **uploaded docs only** (not yet connected to Drive/Confluence/Slack)
+- The knowledge base is built from **uploaded docs only** (not yet connected to Drive/Confluence/SharePoint)
 - Citations are not shown as clickable sources yet (can be added next)
 - Index is stored in memory per session (can be upgraded to persistent storage)
 
@@ -250,39 +276,26 @@ with tab_arch:
         """
 This application is built using a **modular, agentic architecture** designed for clarity, scalability, and enterprise evolution.
 
-Think of the system as **four layers**, moving from user interaction to intelligent response.
+Think of the system as layered from user interaction to intelligent response, with clear separation between **ephemeral (prototype runtime)** and **persistent (enterprise-grade)** storage.
         """
     )
 
-    st.markdown("## Data Flow: Current Prototype (Ephemeral Only)")
+    st.subheader("Data Flow: Current Prototype (Ephemeral Only)")
     render_mermaid(
         """
 flowchart TD
-  U[Marketing Team Member] --> UI[Streamlit UI]
-
-  subgraph EPHEMERAL[EPHEMERAL - Prototype Runtime]
-    SS[Session State: uploaded_files, chat_history, rag_ready]
-    TMP[Temporary Filesystem: /tmp (short lived)]
-    PARSE[Parse Documents: PDF, DOCX, TXT to text]
-    CHUNK[Chunk Text]
-    EMB[Create Embeddings]
-    VEC[Vector Store: In Memory]
-    RAG[RAG Pipeline: Retrieve -> Reason -> Respond]
-  end
-
-  UI --> SS
-  UI --> TMP
-  TMP --> PARSE
-  PARSE --> CHUNK
-  CHUNK --> EMB
-  EMB --> VEC
-
-  UI --> RAG
-  RAG --> VEC
-  RAG --> UI
-
-  TMP --> DEL[Temp file deleted]
-
+  A[Marketing Team Member] --> B[Streamlit UI]
+  B --> C[Session Memory: uploaded_files, chat_history, rag_ready]
+  B --> D[Temp File in /tmp (short lived)]
+  D --> E[Parse to Text: PDF, DOCX, TXT]
+  E --> F[Chunk Text]
+  F --> G[Create Embeddings]
+  G --> H[Vector Store: In Memory]
+  B --> I[Ask Question]
+  I --> J[RAG: Retrieve and Answer]
+  J --> H
+  J --> B
+  D --> K[Delete Temp File]
         """,
         height=560,
     )
@@ -297,48 +310,30 @@ flowchart TD
     )
 
     st.markdown("---")
-    st.markdown("## Data Flow: Production Evolution (Ephemeral + Persistent Layers)")
+    st.subheader("Data Flow: Production Evolution (Ephemeral + Persistent Layers)")
     render_mermaid(
         """
 flowchart TD
-  U[Marketing Team Member] --> UI[Internal Web UI]
-  UI --> IDP[SSO: Azure AD or Okta]
+  A[Marketing Team Member] --> B[Internal Web UI]
+  B --> C[SSO: Azure AD or Okta]
 
-  SP[SharePoint / Confluence / Drive] --> ING[Ingestion Service]
-  MT[MarTech Tools: AJO, CJA, SFMC] --> ING
-  DW[Data Platforms: Snowflake, Databricks] --> ING
+  S[SharePoint or Confluence or Drive] --> I[Ingestion Service]
+  M[MarTech Tools: AJO, CJA, SFMC] --> I
+  D[Data Platforms: Snowflake, Databricks] --> I
 
-  subgraph PROC[EPHEMERAL - Runtime Processing]
-    TMP[Temp Processing]
-    PARSE[Parse and Clean]
-    CHUNK[Chunk and Normalize]
-    EMB[Embed]
-  end
+  I --> P[Parse and Clean]
+  P --> Q[Chunk and Normalize]
+  Q --> R[Embed]
+  R --> V[Persistent Vector Store: Azure AI Search or similar]
 
-  subgraph STORE[PERSISTENT - Enterprise Storage]
-    OBJ[Object Storage (optional): Blob or S3]
-    META[Metadata Store: source, ACL, timestamps]
-    VDB[Vector Store: Azure AI Search or similar]
-    AUD[Audit Logs: who/what/when]
-  end
-
-  subgraph SERVE[SERVING + GOVERNANCE]
-    GW[Gateway / Reverse Proxy: TLS, rate limits]
-    RBAC[Access Control: enforce ACL]
-    RAG[RAG Service: Retrieve -> Reason -> Respond]
-  end
-
-  ING --> TMP --> PARSE --> CHUNK --> EMB --> VDB
-  ING --> META
-  SP --> OBJ
-
-  UI --> GW --> RAG
-  RAG --> RBAC --> VDB
-  RAG --> UI
-  RAG --> AUD
-
+  B --> G[Gateway or Reverse Proxy: TLS, rate limits]
+  G --> H[RAG Service: Retrieve and Answer]
+  H --> X[Access Control: enforce ACL]
+  X --> V
+  H --> B
+  H --> L[Audit Logs: who, what, when]
         """,
-        height=700,
+        height=650,
     )
 
     st.markdown(
@@ -346,13 +341,12 @@ flowchart TD
 **What this means (production-ready behavior):**
 - Parsing/chunking/embedding still happens **ephemerally**, but the organization intentionally chooses what to persist.
 - A persistent vector store enables **reliable, scalable retrieval** across sessions.
-- RBAC + audit logs enable **enterprise governance** (who accessed what, when, and based on which sources).
-- Integrations (SharePoint/Confluence/MarTech) shift ingestion from manual uploads to **managed knowledge pipelines**.
+- SSO + access control + audit logs enable **enterprise governance** (who accessed what, when, and based on which sources).
+- Integrations shift ingestion from manual uploads to **managed knowledge pipelines**.
         """
     )
 
     st.markdown("---")
-
     st.markdown(
         """
 ### Current prototype vs. production evolution
@@ -366,7 +360,7 @@ flowchart TD
 - Persistent vector storage
 - Role-based access control
 - Source citations and traceability
-- Integration with enterprise systems (Drive, Confluence, SharePoint, MarTech tools)
+- Integration with enterprise systems (SharePoint, Confluence, Drive, MarTech tools)
 - Observability (usage, cost, quality metrics)
 
 ---
@@ -381,15 +375,13 @@ This architecture provides a **safe, flexible foundation** for introducing Agent
         """
     )
 
-# =========================
-# FOOTER
-# =========================
+# Footer
 st.markdown(
     """
-    <hr style="margin-top:32px;margin-bottom:8px;">
-    <div style="text-align:center;font-size:12px;color:gray;">
-      © 2025 Howard Nguyen, PhD. For prototype and demonstration only.
-    </div>
-    """,
-    unsafe_allow_html=True
+<hr style="margin-top:32px;margin-bottom:8px;">
+<div style="text-align:center;font-size:12px;color:gray;">
+  © 2025 Howard Nguyen, PhD. For prototype and demonstration only.
+</div>
+""",
+    unsafe_allow_html=True,
 )
