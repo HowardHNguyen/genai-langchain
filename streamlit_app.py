@@ -3,10 +3,7 @@ Run:
   streamlit run streamlit_app.py
 """
 
-import uuid
-import textwrap
 import streamlit as st
-import streamlit.components.v1 as components
 
 try:
     from langchain_core.messages import HumanMessage
@@ -17,58 +14,12 @@ from document_loader import DocumentLoader
 from rag import graph, config, retriever
 
 
-def render_mermaid(code: str, height: int = 650):
-    """
-    Robust Mermaid rendering in Streamlit.
-    Key fix: dedent + trim whitespace before rendering.
-    """
-    diagram_id = f"m_{uuid.uuid4().hex}"
-
-    # 🔑 CRITICAL FIX
-    clean_code = textwrap.dedent(code).strip()
-
-    html = f"""
-    <div id="{diagram_id}" style="font-family: system-ui;">
-      Rendering diagram...
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-    <script>
-      (function() {{
-        const code = `{clean_code}`;
-
-        mermaid.initialize({{
-          startOnLoad: false,
-          theme: "neutral",
-          securityLevel: "loose"
-        }});
-
-        try {{
-          mermaid.parse(code);
-          mermaid.mermaidAPI.render("{diagram_id}_svg", code).then((result) => {{
-            document.getElementById("{diagram_id}").innerHTML = result.svg;
-          }});
-        }} catch (e) {{
-          document.getElementById("{diagram_id}").innerHTML =
-            "<pre style='color:#b00020; white-space:pre-wrap;'>" +
-            "Mermaid error:\\n" + e.message +
-            "\\n\\nDiagram text:\\n" + code +
-            "</pre>";
-        }}
-      }})();
-    </script>
-    """
-    components.html(html, height=height, scrolling=True)
-
-
 # =========================
 # Page config
 # =========================
-st.set_page_config(
-    page_title="Marketing Operations AI Assistant (Agentic Prototype)",
-    layout="wide"
-)
+st.set_page_config(page_title="Marketing Operations AI Assistant (Agentic Prototype)", layout="wide")
 st.title("📚 Marketing Operations AI Assistant (Agentic Prototype)")
+
 
 # =========================
 # Session state
@@ -277,59 +228,157 @@ access control, audit logs, encryption, and retention policies.
     )
 
 # =========================
-# TAB 4: ARCHITECTURE
-# =========================# 
+# TAB 4: ARCHITECTURE (ASCII DIAGRAMS)
+# =========================
 with tab_arch:
     st.header("Architecture & Technical Details")
 
+    st.markdown(
+        """
+Below are two diagrams describing how data flows through the system today (prototype) and how it would look in a production-ready enterprise deployment.
+        """
+    )
+
     st.subheader("Data Flow: Current Prototype (Ephemeral Only)")
-    render_mermaid("""
-flowchart TD
-A[Marketing Team Member] --> B[Streamlit UI]
-B --> C[Session Memory]
-B --> D[Temp File in /tmp]
-D --> E[Parse Documents]
-E --> F[Chunk Text]
-F --> G[Create Embeddings]
-G --> H[In-Memory Vector Store]
-B --> I[Ask Question]
-I --> J[RAG Pipeline]
-J --> H
-J --> B
-D --> K[Delete Temp File]
-""", height=520)
 
-    st.subheader("Data Flow: Production Evolution (Ephemeral + Persistent)")
-    render_mermaid("""
-flowchart TD
-A[Marketing Team Member] --> B[Internal Web UI]
-B --> C[SSO]
+    diagram_ephemeral = r"""
++------------------------+        +-------------------------+
+| Marketing Team Member  |        |       Streamlit UI      |
+| (upload + ask)         |------->|  upload + chat interface|
++------------------------+        +-----------+-------------+
+                                            |
+                                            | (session state)
+                                            v
+                                  +---------+----------+
+                                  |  Session Memory    |
+                                  | - uploaded_files   |
+                                  | - chat_history     |
+                                  | - rag_ready flag   |
+                                  +---------+----------+
+                                            |
+                                            | (temp write for parsing)
+                                            v
+                                  +---------+----------+
+                                  | Temp File (/tmp)   |
+                                  | short-lived         |
+                                  +---------+----------+
+                                            |
+                                            v
++---------------------+     +----------------+     +-------------------+
+| Parse docs to text  |---->| Chunk text     |---->| Create embeddings |
++---------------------+     +----------------+     +---------+---------+
+                                                              |
+                                                              v
+                                                   +----------+----------+
+                                                   | In-Memory Vector    |
+                                                   | Store (ephemeral)   |
+                                                   +----------+----------+
+                                                              ^
+                                                              |
+                                        +---------------------+------------------+
+                                        |     RAG Pipeline: Retrieve -> Answer   |
+                                        +---------------------+------------------+
+                                                              |
+                                                              v
+                                                   +----------+----------+
+                                                   | Answer shown in UI  |
+                                                   +---------------------+
 
-S[SharePoint / Confluence / Drive] --> I[Ingestion Service]
-M[MarTech Tools] --> I
-D[Data Platforms] --> I
+Notes:
+- Temp files are deleted after parsing.
+- Nothing is persisted across app restarts.
+"""
+    st.code(diagram_ephemeral, language="text")
 
-I --> P[Parse and Clean]
-P --> Q[Chunk]
-Q --> R[Embed]
-R --> V[Persistent Vector Store]
+    st.markdown(
+        """
+**What this means (prototype behavior):**
+- Uploaded files are held in session memory and written briefly to a temporary filesystem for parsing.
+- The app stores only embeddings and chunks in memory for retrieval during the session.
+- When the app restarts or the session ends, the content is not retained (no persistence).
+        """
+    )
 
-B --> G[Gateway]
-G --> H[RAG Service]
-H --> X[Access Control]
-X --> V
-H --> B
-H --> L[Audit Logs]
-""", height=600)
+    st.divider()
+    st.subheader("Data Flow: Production Evolution (Ephemeral + Persistent Layers)")
+
+    diagram_production = r"""
++------------------------+      +---------------------+      +----------------------+
+| Marketing Team Member  |----->| Internal Web UI     |----->| SSO / Identity (IdP) |
++------------------------+      +----------+----------+      +----------------------+
+                                          |
+                                          v
+                                 +--------+--------+
+                                 | Gateway / Proxy |
+                                 | TLS + Rate Limit|
+                                 +--------+--------+
+                                          |
+                                          v
+                              +-----------+------------+
+                              |  RAG Service            |
+                              | Retrieve -> Reason ->   |
+                              | Respond + Citations     |
+                              +-----------+------------+
+                                          |
+                                          v
+                             +------------+-------------+
+                             | Access Control (RBAC/ACL)|
+                             +------------+-------------+
+                                          |
+                                          v
+                             +------------+-------------+
+                             | Persistent Vector Store   |
+                             | (Azure AI Search, etc.)   |
+                             +------------+-------------+
+                                          ^
+                                          |
+         +---------------------+----------+----------+----------------------+
+         |                     |                     |                      |
+         v                     v                     v                      v
++------------------+   +------------------+   +------------------+   +------------------+
+| SharePoint /     |   | Confluence /     |   | MarTech Tools     |   | Data Platforms    |
+| Drive Docs       |   | Wiki/Pages       |   | (AJO/CJA/SFMC)    |   | (Snowflake/DBX)   |
++--------+---------+   +--------+---------+   +--------+---------+   +--------+---------+
+         \___________________________  Ingestion Service  ____________________________/
+                                      (scheduled or on-demand)
+                                              |
+                                              v
+                                 +------------+-------------+
+                                 | Ephemeral Processing      |
+                                 | parse -> chunk -> embed   |
+                                 +------------+-------------+
+                                              |
+                                              v
+                                 +------------+-------------+
+                                 | Metadata Store            |
+                                 | source, ACL, timestamps   |
+                                 +------------+-------------+
+
+Also:
+- Audit logs capture who asked what, when, and what sources were used.
+- Optional raw docs can be stored in controlled object storage (Blob/S3) if required.
+"""
+    st.code(diagram_production, language="text")
+
+    st.markdown(
+        """
+**What this means (production-ready behavior):**
+- Parsing/chunking/embedding still happens ephemerally, but the organization intentionally chooses what to persist.
+- Persistent vector storage enables reliable, scalable retrieval across sessions.
+- SSO + access control + audit logs enable enterprise governance and traceability.
+- Integrations shift ingestion from manual uploads to managed knowledge pipelines.
+        """
+    )
+
 
 # =========================
 # Footer
 # =========================
 st.markdown(
     """
-<hr>
+<hr style="margin-top:32px;margin-bottom:8px;">
 <div style="text-align:center;font-size:12px;color:gray;">
-© 2025 Howard Nguyen, PhD. Prototype for internal demonstration only.
+  © 2025 Howard Nguyen, PhD. For prototype and demonstration only.
 </div>
 """,
     unsafe_allow_html=True,
