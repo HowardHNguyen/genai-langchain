@@ -119,13 +119,10 @@ with tab_about:
 
     st.markdown(
         """
-## Agentic AI Knowledge Platform (RAG + Workflows)
-
 This application is an **Agentic AI Knowledge Platform** designed to demonstrate how large language models (LLMs) can be safely and effectively embedded into enterprise environments using **retrieval-augmented generation (RAG)** and **human-in-the-loop workflows**.
 
 Rather than functioning as a generic chatbot, the platform grounds AI reasoning in **trusted internal knowledge sources**, enabling consistent, explainable, and auditable outputs aligned with organizational standards.
 
----
 
 ### What this platform demonstrates
 
@@ -138,7 +135,6 @@ Core capabilities demonstrated include:
 - Clear separation between ephemeral processing and persistent knowledge layers
 - A foundation for evolving AI from **answers** to **assisted workflows**
 
----
 
 ### Why this matters for enterprises
 
@@ -150,7 +146,6 @@ Organizations increasingly face:
 
 This platform addresses these challenges by positioning AI as a **knowledge interpreter and workflow assistant**, not an autonomous decision maker.
 
----
 
 ### How this differs from general AI assistants
 
@@ -164,7 +159,6 @@ Together, they form a layered AI strategy:
 - **General AI assistants** → productivity and communication  
 - **Agentic AI Knowledge Platform** → trusted reasoning over enterprise knowledge
 
----
 
 ### What the platform does today
 
@@ -174,7 +168,6 @@ Together, they form a layered AI strategy:
 - Demonstrates the **Retrieve → Reason → Respond** agentic loop
 - Operates with session-scoped data for safety and experimentation
 
----
 
 ### How this evolves beyond the prototype
 
@@ -185,7 +178,6 @@ The architecture is intentionally designed to evolve into a production-grade pla
 - Integration with systems such as SharePoint, Confluence, and MarTech tools
 - Agentic workflows that assist with drafting, validation, and execution — always with human approval
 
----
 
 ### Important note
 
@@ -193,7 +185,6 @@ This is an **exploratory prototype** intended to demonstrate architectural patte
 
 It is evaluated as an **internal enablement platform**, not a consumer chatbot.  
 Production deployment would include additional governance, security, and compliance controls aligned with enterprise requirements.
-
         """
     )
 
@@ -205,11 +196,8 @@ with tab_howto:
 
     st.markdown(
         """
-## How to use the platform
-
 This platform is designed to support both **knowledge discovery** and **workflow acceleration**.
 
----
 
 ### Step 1 — Provide trusted knowledge
 
@@ -220,7 +208,6 @@ Upload internal documents such as:
 
 These documents become the **source of truth** the AI reasons over.
 
----
 
 ### Step 2 — Build the knowledge index
 
@@ -231,7 +218,6 @@ Click **Build Knowledge Base** to:
 
 This step simulates how enterprise ingestion pipelines would work in production.
 
----
 
 ### Step 3 — Ask questions or initiate workflows
 
@@ -245,7 +231,6 @@ Use natural language to:
 - Validate decisions  
   *“Create a QA checklist for this launch.”*
 
----
 
 ### Best practices for deeper results
 
@@ -253,7 +238,6 @@ Use natural language to:
 - Specify the desired output format (bullets, checklist, summary)
 - Treat outputs as **drafts** for review and approval
 
----
 
 ### Current limitations (intentional)
 
@@ -263,7 +247,6 @@ Use natural language to:
 
 These constraints keep the prototype safe while validating value.
 
----
 
 ### Production vision
 
@@ -272,7 +255,6 @@ In production, these interactions evolve into:
 - Write-back to enterprise systems
 - Role-aware assistance
 - Measurable productivity gains
-
         """
     )
 
@@ -312,8 +294,6 @@ without introducing data retention, access, or governance risk.
 
         """
     )
-
-    st.subheader("Data Flow: Current Prototype (Ephemeral Only)")
 
     diagram_ephemeral = r"""
 +------------------------+        +-------------------------+
@@ -393,8 +373,6 @@ The key architectural shift is **intentional persistence**:
 Importantly, ephemeral processing remains — it is complemented, not replaced, by persistent layers.
 """
     )
-
-    st.subheader("Data Flow: Production Evolution (Ephemeral + Persistent Layers)")
 
     diagram_production = r"""
 +------------------------+      +---------------------+      +----------------------+
