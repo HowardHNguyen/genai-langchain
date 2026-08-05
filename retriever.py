@@ -4,6 +4,7 @@ import os
 import tempfile
 from typing import List, Any
 
+from openai import APIConnectionError, AuthenticationError, RateLimitError
 from pydantic.v1 import Field
 
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
@@ -17,6 +18,40 @@ from llms import EMBEDDINGS
 
 # One in-memory vector store for the app session
 VECTOR_STORE = InMemoryVectorStore(embedding=EMBEDDINGS)
+
+
+class EmbeddingServiceError(Exception):
+    """Raised when the embeddings API call fails for a user-facing reason
+    (out of credit, bad/expired key, or temporary connection issue)."""
+
+
+def _run_embedding_call(fn, *args, **kwargs):
+    """Run an embeddings-related call, translating OpenAI errors into a
+    single friendly EmbeddingServiceError with actionable guidance."""
+    try:
+        return fn(*args, **kwargs)
+    except RateLimitError as e:
+        msg = str(e).lower()
+        if "quota" in msg or "billing" in msg or "credit" in msg:
+            raise EmbeddingServiceError(
+                "The embeddings service reported that the OpenAI account has "
+                "run out of credit or hit its billing limit. Please add credit "
+                "at platform.openai.com (Settings -> Billing) and try again."
+            ) from e
+        raise EmbeddingServiceError(
+            "The embeddings service is temporarily rate-limited (too many "
+            "requests). Please wait a minute and try again."
+        ) from e
+    except AuthenticationError as e:
+        raise EmbeddingServiceError(
+            "The OpenAI API key is missing, invalid, or has been revoked. "
+            "Please check the OPENAI_API_KEY value in your app secrets."
+        ) from e
+    except APIConnectionError as e:
+        raise EmbeddingServiceError(
+            "Could not reach the OpenAI API (network/connection issue). "
+            "Please try again in a moment."
+        ) from e
 
 
 class DocumentRetriever(BaseRetriever):
@@ -33,7 +68,7 @@ class DocumentRetriever(BaseRetriever):
         splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         split_docs = splitter.split_documents(docs)
 
-        VECTOR_STORE.add_documents(split_docs)
+        _run_embedding_call(VECTOR_STORE.add_documents, split_docs)
 
     def add_documents_from_uploads(self, uploaded_files: List[Any]) -> None:
         """Load Streamlit uploaded files and add them to the vector store."""
@@ -72,4 +107,6 @@ class DocumentRetriever(BaseRetriever):
         """Retrieve relevant chunks from the vector store."""
         if not self.documents:
             return []
-        return VECTOR_STORE.similarity_search(query=query, k=self.k)
+        return _run_embedding_call(
+            VECTOR_STORE.similarity_search, query=query, k=self.k
+        )

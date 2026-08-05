@@ -12,6 +12,7 @@ except ImportError:
 
 from document_loader import DocumentLoader
 from rag import graph, config, retriever
+from retriever import EmbeddingServiceError
 
 
 # =========================
@@ -64,14 +65,19 @@ with tab_chat:
                     st.markdown(reply)
             else:
                 with st.chat_message("assistant"):
-                    with st.spinner("Thinking..."):
-                        result = graph.invoke(
-                            {"messages": [HumanMessage(content=user_input)]},
-                            config=config,
-                        )
-                        answer = result["messages"][-1].content
-                        st.markdown(answer)
-                st.session_state.chat_history.append({"role": "assistant", "content": answer})
+                    try:
+                        with st.spinner("Thinking..."):
+                            result = graph.invoke(
+                                {"messages": [HumanMessage(content=user_input)]},
+                                config=config,
+                            )
+                            answer = result["messages"][-1].content
+                            st.markdown(answer)
+                        st.session_state.chat_history.append({"role": "assistant", "content": answer})
+                    except EmbeddingServiceError as e:
+                        answer = f"⚠️ Could not answer your question: {e}"
+                        st.error(answer)
+                        st.session_state.chat_history.append({"role": "assistant", "content": answer})
 
     with col2:
         st.subheader("Document Management")
@@ -99,10 +105,13 @@ with tab_chat:
             if not st.session_state.uploaded_files:
                 st.warning("Please upload documents first.")
             else:
-                with st.spinner("Indexing documents..."):
-                    retriever.add_documents_from_uploads(st.session_state.uploaded_files)
-                    st.session_state.rag_ready = True
-                st.success("Knowledge base ready.")
+                try:
+                    with st.spinner("Indexing documents..."):
+                        retriever.add_documents_from_uploads(st.session_state.uploaded_files)
+                        st.session_state.rag_ready = True
+                    st.success("Knowledge base ready.")
+                except EmbeddingServiceError as e:
+                    st.error(f"⚠️ Could not build the knowledge base: {e}")
 
         if st.button("Clear Session"):
             st.session_state.chat_history = []
