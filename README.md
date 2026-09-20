@@ -2,7 +2,7 @@
 
 A Streamlit knowledge assistant for Marketing Operations and other document-based use cases.
 Upload documents, build a session-owned index, and ask questions with numbered source excerpts.
-The graph performs question rewriting for follow-ups, retrieval, and grounded generation.
+The graph performs follow-up question rewriting, hybrid keyword/semantic retrieval, complete table/passage expansion, and grounded generation. It can retry once with previously unseen evidence after an insufficient-evidence response.
 It is a fixed RAG workflow, not an autonomous tool-using agent or an approval system.
 
 ## Run locally
@@ -55,11 +55,15 @@ Do not paste real API keys into issues or chat. A 404's exact cause still requir
 ## Architecture and isolation
 
 ```text
-Session uploads → memory parsing → 1,000-character chunks / 200-character overlap
-                → OpenAI text-embedding-3-small → session-owned InMemoryVectorStore
-Question + bounded history → optional Groq rewrite → query embedding → top 4 chunks
-                           → Groq grounded generation → citation-ID validation
-                           → answer + original filename/page/section excerpts
+Session uploads → structure-aware memory parsing → complete table/text parents
+                → 1,400-character search chunks / 200-character overlap
+                → OpenAI text-embedding-3-small (512 dimensions), 32-chunk batches
+                → session-owned vector index + BM25 keyword index
+Question + bounded history → optional Groq rewrite → hybrid search / heading ranking
+                           → expand matching chunks to complete tables/passages
+                           → token-bounded Groq generation → citation-ID validation
+                           → formatted answer + original source excerpts
+Insufficient evidence → one broader search when new passages are available
 ```
 
 - No module-global retriever, vector store, chat model, or conversation checkpoint.
@@ -68,14 +72,19 @@ Question + bounded history → optional Groq rewrite → query embedding → top
   index and history, but chat is disabled whenever the selected files do not match that index.
 - Identical file content is indexed once. Rebuilding an unchanged selection does not call embeddings again.
 - Clearing the session discards the index, uploaded widget state, and conversation, with a new widget identity.
-- Recent successful conversation: at most six exchanges / 12,000 characters. UI: latest 20 turns.
+- Recent successful conversation: at most six exchanges / 12,000 characters, further limited to 1,200 tokenizer tokens in each model request. UI: latest 20 turns.
+- Model input is budgeted to 5,000 estimated tokens including instructions, question, history and evidence. Complete tables are prioritized over older conversation; a passage is skipped rather than silently truncated. Output is capped at 2,048 tokens, with a visible notice if the model reaches that cap. Token estimates reserve framing space; provider/account rate limits still apply.
+- Overview/list retrieval starts with 10 hybrid-ranked parent passages plus same-table row groups and neighboring text, bounded to 32,000 characters before prompt packing. Broader retry searches up to 20 parents / 48,000 characters and prioritizes unseen passages.
+- A session schema version resets legacy in-memory indexes after this upgrade. Rebuild uploaded documents once.
 
 ## Files and limits
 
 PDF (text-based), UTF-8 TXT, DOCX (paragraphs and tables), and EPUB (spine order) are supported.
 Convert legacy `.doc` to `.docx`; OCR scanned PDFs before upload. Password-protected PDFs are rejected.
-Limits: 10 files; 10 MB/file; 30 MB total; 300 PDF pages/file; 300,000 extracted characters/file;
-40 MB expanded ZIP content; 2,000 archive entries; 1,000 chunks/index; 4,000 characters/question.
+Limits: 10 files; **100 MB/file**; **200 MB total**; **3,000 PDF pages/file**; 8 million extracted characters/file;
+12 million extracted characters/selection; 200 MB expanded ZIP content; 10,000 archive entries;
+12,000 searchable chunks/index; 4,000 characters/question. Limits are centralized in `limits.py`; the Streamlit server upload setting matches the 100 MB per-file limit.
+Large documents index in batches with visible progress. Expanding the upload limit does not remove all memory, text-volume, or provider quota limits.
 All selected files must parse before indexing commits. The app reports file-level parsing errors.
 These limits reduce resource use; parsers are not a sandbox against every malicious document.
 
@@ -92,7 +101,7 @@ These limits reduce resource use; parsers are not a sandbox against every malici
   to disregard document instructions. No tool execution is exposed. This mitigates, but cannot eliminate, prompt injection.
 - Citation validation rejects missing/out-of-range numeric references. Excerpts are real retrieved passages;
   reference validation does not prove every claim is entailed by a passage. Review answers against sources.
-- Model text and excerpts are rendered as plain text to avoid model-generated remote images/HTML.
+- Model Markdown renders as formatted text and tables through a parser with raw HTML disabled. Active links and images are removed before Streamlit sanitizes the generated HTML. Source excerpts remain plain text.
 - This public prototype has no SSO, tenant authorization, durable storage, global rate limits, or billing enforcement.
   The short per-session cooldown is a UI aid, not an abuse defense. Use non-sensitive sample documents and provider spend limits.
 
@@ -104,8 +113,10 @@ python -m unittest discover -s tests -v
 ```
 
 Tests use fake models/embeddings and synthetic documents; no API keys or paid calls are required.
-Coverage includes cross-session isolation, atomic rebuilds, deduplication, parsing, prompt roles,
+Coverage includes cross-session isolation, atomic/batched rebuilds, deduplication, complete ten-row table retrieval,
+501-page PDF parsing, an upload larger than 10 MB, input-token budgets, safe formatted rendering,
 follow-up context, source references, provider errors, startup, and Streamlit session reset.
+Regression fixtures are synthetic; private user documents are never committed.
 GitHub Actions runs the same checks on Linux/Python 3.12.
 
 For semantic quality and prompt-injection resistance, use the manual evaluation cases in

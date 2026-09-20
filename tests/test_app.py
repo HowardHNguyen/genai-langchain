@@ -36,7 +36,7 @@ class FakeModel:
     def __init__(self, answers=None):
         self.answers = list(answers or ['The policy is apple. [1]'])
         self.calls = []
-    def invoke(self, messages):
+    def invoke(self, messages, **kwargs):
         self.calls.append(messages)
         return AIMessage(content=self.answers.pop(0))
 
@@ -104,7 +104,7 @@ class LoaderTests(unittest.TestCase):
         doc.add_table(rows=1, cols=1).cell(0, 0).text = 'apple'
         buffer = io.BytesIO()
         doc.save(buffer)
-        self.assertIn('apple', load_document('test.docx', buffer.getvalue())[0].page_content)
+        self.assertIn('apple', '\n'.join(d.page_content for d in load_document('test.docx', buffer.getvalue())))
     def test_blank_pdf_requires_ocr(self):
         pdf, buffer = PdfWriter(), io.BytesIO()
         pdf.add_blank_page(width=100, height=100)
