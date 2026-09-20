@@ -103,6 +103,8 @@ with chat:
             st.text(turn["question"])
         with st.chat_message("assistant"):
             st.html(ANSWER_CSS + answer_html(turn["answer"]))
+            if turn.get("citation_warning"):
+                st.warning(turn["citation_warning"])
             for source in turn.get("sources", []):
                 location = f" · page {source['page']}" if source.get("page") else ""
                 if source.get("section"):
@@ -125,10 +127,10 @@ with chat:
             try:
                 with st.spinner("Finding evidence and preparing an answer..."):
                     result = ask(retriever, create_chat_model(settings), question, st.session_state.kb_history)
-                turn = {"question": question, "answer": result["answer"], "sources": result["sources"]}
+                turn = {"question": question, "answer": result["answer"], "sources": result["sources"], "citation_warning": result.get("citation_warning", "")}
                 st.session_state.kb_turns = (st.session_state.kb_turns + [turn])[-20:]
                 # Do not reuse unsuccessful/ungrounded responses as conversation context.
-                if result["sources"]:
+                if result["sources"] and not result.get("citation_warning"):
                     st.session_state.kb_history = (st.session_state.kb_history + [(question, result["answer"])])[-6:]
                 show_turn(turn)
             except (ConfigurationError, ServiceError, ValueError) as exc:

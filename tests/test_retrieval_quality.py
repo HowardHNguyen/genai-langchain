@@ -10,7 +10,7 @@ from pypdf.generic import DictionaryObject, NameObject, DecodedStreamObject
 from answer_rendering import answer_html
 from document_loader import load_document
 from limits import MAX_FILE_BYTES, MAX_PDF_PAGES
-from rag import make_prompt, token_count, MAX_INPUT_TOKENS, ask, NO_EVIDENCE
+from rag import make_prompt, token_count, MAX_INPUT_TOKENS, ask, NO_EVIDENCE, normalize_citations
 from retriever import DocumentRetriever, Upload, KeywordIndex
 from test_app import FakeEmbeddings, FakeModel
 
@@ -121,6 +121,27 @@ class LargeDocumentTests(unittest.TestCase):
         docs = load_document('501-pages.pdf', buffer.getvalue())
         self.assertEqual(docs[-1].metadata['page'], 501)
         self.assertIn('verification fact', docs[-1].page_content)
+
+
+class CitationTests(unittest.TestCase):
+    def test_common_reference_formats(self):
+        for marker in ('[1]', '[Source 1]', '[S1]', '【1】', '【1†source】', '(Source 1)'):
+            answer, cited, warning = normalize_citations('Fact ' + marker, 3)
+            self.assertEqual(cited, {1})
+            self.assertEqual(warning, '')
+            self.assertEqual(answer, 'Fact [1]')
+
+    def test_grouped_ranges_and_invalid_references(self):
+        answer, cited, warning = normalize_citations('Facts [1–3], [1, 99]', 3)
+        self.assertEqual(cited, {1, 2, 3})
+        self.assertNotIn('[99]', answer)
+        self.assertTrue(warning)
+
+    def test_missing_citations_preserve_answer_with_honest_warning(self):
+        answer, cited, warning = normalize_citations('Useful answer with no reference.', 2)
+        self.assertEqual(answer, 'Useful answer with no reference.')
+        self.assertFalse(cited)
+        self.assertIn('not as verified support', warning)
 
 
 class RenderingTests(unittest.TestCase):

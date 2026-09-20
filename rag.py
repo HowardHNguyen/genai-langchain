@@ -36,6 +36,7 @@ class State(TypedDict, total=False):
     sources: list
     expanded: bool
     retry_needed: bool
+    citation_warning: str
 
 
 @lru_cache(maxsize=1)
@@ -91,6 +92,32 @@ def make_prompt(question, history, docs):
     return [SystemMessage(content=SYSTEM_PROMPT), *messages, HumanMessage(content=payload(sources))], sources, selected
 
 
+def normalize_citations(answer, source_count):
+    """Accept common model reference formats without mapping invented IDs to sources."""
+    answer = re.sub(r"\[(?:source\s*|s)(\d+)\]", r"[\1]", answer, flags=re.I)
+    answer = re.sub(r"【(\d+)(?:[†:][^】]*)?】", r"[\1]", answer)
+    answer = re.sub(r"\(source\s+(\d+)\)", r"[\1]", answer, flags=re.I)
+    cited, invalid = set(), set()
+    def replace(match):
+        group = match.group(1)
+        if re.fullmatch(r"\d+\s*[-–]\s*\d+", group):
+            start, end = map(int, re.split(r"\s*[-–]\s*", group))
+            numbers = set(range(start, end + 1)) if 0 <= end - start <= 100 else {0}
+        else:
+            numbers = {int(n) for n in re.findall(r"\d+", group)}
+        valid = {n for n in numbers if 1 <= n <= source_count}
+        cited.update(valid)
+        invalid.update(numbers - valid)
+        return ", ".join(f"[{n}]" for n in sorted(valid)) if valid else "(unverified reference)"
+    answer = re.sub(r"\[([\d, \-–]+)\]", replace, answer)
+    warning = ""
+    if invalid:
+        warning = "Some model references could not be matched to the retrieved passages and were removed. Verify the answer against the source excerpts."
+    elif not cited:
+        warning = "The model did not provide usable inline citations. The retrieved passages below are provided for review, not as verified support for every claim."
+    return answer, cited, warning
+
+
 def create_graph(retriever, model):
     def rewrite(state):
         history = recent_messages(state.get("history", []))
@@ -114,17 +141,15 @@ def create_graph(retriever, model):
         answer = response.content
         if not isinstance(answer, str) or not answer.strip():
             raise ServiceError("Groq returned an empty answer. Please try again.")
-        cited = set()
-        for group in re.findall(r"\[([\d, ]+)\]", answer):
-            cited.update(int(number) for number in re.findall(r"\d+", group))
-        valid = set(range(1, len(sources) + 1))
         if answer.strip() == NO_EVIDENCE:
-            return {"answer": NO_EVIDENCE, "sources": [], "docs": selected}
-        if not cited or not cited.issubset(valid):
-            return {"answer": "I could not produce an answer with valid source references. Please rephrase your question or add clearer evidence.", "sources": [], "docs": selected}
+            return {"answer": NO_EVIDENCE, "sources": [], "docs": selected, "citation_warning": ""}
+        answer, cited, warning = normalize_citations(answer, len(sources))
         if response.response_metadata.get("finish_reason") == "length":
             answer += "\n\n*The model reached its response limit. Ask for the remaining items or a shorter summary.*"
-        return {"answer": answer, "sources": [s for s in sources if s["id"] in cited], "docs": selected}
+        # A reference-format problem must not replace an otherwise useful answer with
+        # an opaque refusal. Distinguish actual linked sources from review-only evidence.
+        evidence = [s for s in sources if s["id"] in cited] if cited else sources
+        return {"answer": answer, "sources": evidence, "docs": selected, "citation_warning": warning}
 
     def expand(state):
         broader = retriever.invoke(state["query"], expanded=True)
