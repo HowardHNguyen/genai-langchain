@@ -43,13 +43,14 @@ def provider_call(provider, operation, *args, **kwargs):
 def create_chat_model(settings: Settings):
     return ChatGroq(api_key=settings.require("Groq"), model=settings.model,
                     base_url="https://api.groq.com", temperature=0,
-                    max_tokens=1500, timeout=30, max_retries=1)
+                    max_tokens=2048, timeout=60, max_retries=1,
+                    reasoning_effort="low" if settings.model.startswith("openai/gpt-oss-") else None)
 
 
 def create_embeddings(settings: Settings):
     return OpenAIEmbeddings(api_key=settings.require("OpenAI"),
                             base_url="https://api.openai.com/v1",
-                            model="text-embedding-3-small", request_timeout=30,
+                            model="text-embedding-3-small", dimensions=512, request_timeout=60,
                             max_retries=1, chunk_size=64)
 
 

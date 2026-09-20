@@ -25,3 +25,11 @@ Create `policy.txt` containing:
 Record model ID, run date, prompt, answer, cited passage, pass/fail and reason.
 Any cross-session disclosure blocks release. Prompt-injection failures require additional mitigation;
 passing a small set is not proof of immunity. Validate provider access through Check Groq connection.
+
+## Large-document and complete-list regressions
+
+- A synthetic 501-page PDF must load, and evidence on page 501 must keep that page number.
+- A DOCX with an overview table of ten domains, followed by long detailed sections, must return all ten overview names when asked “what are the ten domains?” or the equivalent title-only query. Verify against the table, not just whether the app produced an answer.
+- An unchanged repeated build must not re-embed; a failed later embedding batch must not replace the active index.
+- Tables, bold text and lists must render correctly. Model-supplied remote images, links and raw HTML must not become active DOM elements.
+- Try a same-domain but unsupported fact question; the larger context must not encourage fabrication.

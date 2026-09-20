@@ -8,6 +8,8 @@ from document_loader import SUPPORTED_EXTENSIONS
 from llms import create_chat_model, create_embeddings, check_groq, ServiceError
 from retriever import DocumentRetriever, Upload, BuildError, selection_signature
 from rag import ask
+from answer_rendering import answer_html, ANSWER_CSS
+from limits import MAX_FILE_MB, MAX_BATCH_MB, MAX_PDF_PAGES, MAX_FILES, MAX_TEXT_CHARS, MAX_INDEX_CHARS, MAX_CHUNKS
 
 LOGGER = logging.getLogger(__name__)
 st.set_page_config(page_title="AI Knowledge Platform", page_icon="📚", layout="wide")
@@ -22,9 +24,10 @@ def reset_session():
     st.session_state.kb_history = []
     st.session_state.kb_turns = []
     st.session_state.kb_retriever = None
+    st.session_state.kb_schema = 2
 
 
-if "kb_id" not in st.session_state:
+if "kb_id" not in st.session_state or st.session_state.get("kb_schema") != 2:
     reset_session()
 settings = Settings.load()
 st.title("📚 AI Knowledge Platform")
@@ -58,7 +61,8 @@ with chat:
     st.caption("Build sends extracted text to OpenAI for embeddings. Questions, recent conversation, and selected passages are sent to Groq. Only upload content you are authorized to share with these providers.")
     uploaded = st.file_uploader("Upload documents", type=list(SUPPORTED_EXTENSIONS),
                                 accept_multiple_files=True, key=f"upload_{st.session_state.kb_id}",
-                                max_upload_size=10)
+                                max_upload_size=MAX_FILE_MB)
+    st.caption(f"Up to {MAX_FILE_MB} MB per file · {MAX_BATCH_MB} MB total · {MAX_PDF_PAGES:,} PDF pages per file")
     uploads = [Upload(file.name, file.getvalue()) for file in (uploaded or [])]
     signature = selection_signature(uploads)
     retriever = st.session_state.kb_retriever
@@ -70,7 +74,11 @@ with chat:
             with st.spinner("Parsing and indexing documents..."):
                 if retriever is None:
                     retriever = DocumentRetriever(create_embeddings(settings))
-                changed = retriever.build(uploads)
+                indicator = st.progress(0, text="Preparing documents…")
+                try:
+                    changed = retriever.build(uploads, progress=lambda fraction, message: indicator.progress(fraction, text=message))
+                finally:
+                    indicator.empty()
                 st.session_state.kb_retriever = retriever
                 active = True
                 if changed:
@@ -94,14 +102,15 @@ with chat:
         with st.chat_message("user"):
             st.text(turn["question"])
         with st.chat_message("assistant"):
-            # Plain text prevents model-produced images/HTML from loading remote resources.
-            st.text(turn["answer"])
+            st.html(ANSWER_CSS + answer_html(turn["answer"]))
             for source in turn.get("sources", []):
                 location = f" · page {source['page']}" if source.get("page") else ""
                 if source.get("section"):
                     location += f" · section {source['section']}"
                 with st.expander(f"[{source['id']}] Source passage"):
                     st.text(source["source"] + location)
+                    if source.get("section_title"):
+                        st.text(source["section_title"])
                     st.text(source["text"])
 
     for turn in st.session_state.kb_turns:
@@ -153,7 +162,7 @@ This public demo has no enterprise authentication, durable storage, or organizat
 Use non-sensitive demonstration documents. Enterprise deployment requires an access and data-governance review.
 """)
 with howto:
-    st.markdown("""
+    st.markdown(f"""
 1. Check the Groq connection in the sidebar if generation is failing.
 2. Select PDF, UTF-8 TXT, DOCX, or EPUB files. Convert legacy DOC files to DOCX; run OCR on scanned PDFs first.
 3. Click **Build Knowledge Base**. All selected files must parse successfully. Rebuilding the same selection is a no-op.
@@ -161,9 +170,11 @@ with howto:
 5. Removing or replacing files disables chat until you rebuild. A successful changed build starts a new conversation.
 6. Use **Clear Session** to remove the index, files, and conversation for this browser session.
 
-Limits: 10 files, 10 MB per file, 30 MB total, 300 PDF pages per file, 300,000 extracted characters per file,
-and 1,000 chunks per knowledge base. Questions are limited to 4,000 characters.
-The model receives at most six recent successful exchanges (12,000 characters), plus four retrieved chunks.
+Limits: {MAX_FILES} files, {MAX_FILE_MB} MB per file, {MAX_BATCH_MB} MB total, {MAX_PDF_PAGES:,} PDF pages per file,
+{MAX_TEXT_CHARS:,} extracted characters per file, {MAX_INDEX_CHARS:,} across the selection, and {MAX_CHUNKS:,} searchable chunks per knowledge base. Questions are limited to 4,000 characters.
+The model receives at most six recent successful exchanges (12,000 characters), plus complete retrieved passages within a bounded context budget.
+Tables retain their headings and rows. Keyword and semantic search are combined; an insufficient-evidence response triggers one broader search.
+Large documents are indexed in batches with progress updates and can take several minutes.
 The UI retains the latest 20 turns. Unsupported, corrupted, or oversized files produce explicit errors.
 
 If Groq reports **not found**, ask the owner to check `GROQ_MODEL` against the account's current model list.
@@ -174,15 +185,17 @@ with architecture:
   ├─ Selected files → in-memory parsing → chunking → OpenAI embeddings
   │                                              → session-owned vector index
   └─ Question + bounded conversation → standalone search query (Groq)
-                                      → retrieve four chunks (OpenAI query embedding)
-                                      → grounded answer (Groq) → source-ID validation
+                                      → hybrid keyword + semantic search
+                                      → expand to complete tables and passages
+                                      → grounded answer (Groq; one broader retry if needed)
+                                      → source-ID validation → formatted answer
                                       → answer + source excerpts
 
 Clear Session → discard session-owned index, uploads, conversation, and widget state
 No global retriever · no global checkpoint · no disk embedding cache""", language=None)
     st.markdown("""
 Retrieved text is supplied as untrusted data in a user-role message, separate from system instructions.
-The graph exposes no action tools. Numeric citation IDs are checked against retrieved passages;
+The graph exposes no action tools. Model Markdown is rendered with raw HTML, active links, and remote images disabled. Numeric citation IDs are checked against retrieved passages;
 this validates reference existence, not factual entailment. Prompt injection remains a model-level risk.
 
 Next steps toward an enterprise platform: authentication, per-user authorization, durable tenant-scoped storage,
