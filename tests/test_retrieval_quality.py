@@ -125,14 +125,14 @@ class LargeDocumentTests(unittest.TestCase):
 
 class CitationTests(unittest.TestCase):
     def test_common_reference_formats(self):
-        for marker in ('[1]', '[Source 1]', '[S1]', '【1】', '【1†source】', '(Source 1)'):
+        for marker in ('[1]', '[Source 1]', '[S1]', '【1】', '【1†source】', '(Source 1)', '(id 1)'):
             answer, cited, warning = normalize_citations('Fact ' + marker, 3)
             self.assertEqual(cited, {1})
             self.assertEqual(warning, '')
             self.assertEqual(answer, 'Fact [1]')
 
     def test_grouped_ranges_and_invalid_references(self):
-        answer, cited, warning = normalize_citations('Facts [1–3], [1, 99]', 3)
+        answer, cited, warning = normalize_citations('Facts [1–3], [1, 99], (ids 2‑3)', 3)
         self.assertEqual(cited, {1, 2, 3})
         self.assertNotIn('[99]', answer)
         self.assertTrue(warning)
