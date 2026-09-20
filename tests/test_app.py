@@ -146,11 +146,12 @@ class GraphTests(unittest.TestCase):
         self.assertEqual(result['query'], 'Explain the apple policy')
         self.assertEqual(len(model.calls), 2)
         self.assertIn('The apple policy. [1]', [m.content for m in model.calls[1]])
-    def test_invalid_and_missing_citations_are_rejected(self):
+    def test_invalid_and_missing_citations_are_explicitly_flagged(self):
         for answer in ('Claim [99]', 'Uncited claim', 'Claim [1] and other [99]'):
             result = ask(indexed(), FakeModel([answer]), 'Policy?', [])
-            self.assertEqual(result['sources'], [])
-            self.assertNotEqual(result['answer'], answer)
+            self.assertTrue(result['citation_warning'])
+            self.assertNotIn('[99]', result['answer'])
+            self.assertTrue(result['sources'])
     def test_empty_index_does_not_call_model(self):
         model = FakeModel()
         result = ask(DocumentRetriever(FakeEmbeddings()), model, 'Policy?', [])

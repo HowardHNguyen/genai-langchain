@@ -99,7 +99,7 @@ These limits reduce resource use; parsers are not a sandbox against every malici
   are suppressed. Do not enable HTTP debug logging or external prompt tracing for sensitive documents.
 - Retrieved content is JSON-encoded user-role data, separate from system instructions. Prompts instruct the model
   to disregard document instructions. No tool execution is exposed. This mitigates, but cannot eliminate, prompt injection.
-- Citation validation rejects missing/out-of-range numeric references. Excerpts are real retrieved passages;
+- Citation validation normalizes common reference formats and removes out-of-range markers. Missing or invalid references produce an explicit review warning alongside the answer and retrieved excerpts; they do not turn the whole answer into an opaque refusal. Answers with citation warnings are excluded from follow-up history. Excerpts are real retrieved passages;
   reference validation does not prove every claim is entailed by a passage. Review answers against sources.
 - Model Markdown renders as formatted text and tables through a parser with raw HTML disabled. Active links and images are removed before Streamlit sanitizes the generated HTML. Source excerpts remain plain text.
 - This public prototype has no SSO, tenant authorization, durable storage, global rate limits, or billing enforcement.
