@@ -21,7 +21,10 @@ SYSTEM_PROMPT = (
     "and return ALL relevant rows, not just the first examples. Read all passages before deciding information is missing. "
     "When a specific number of items is requested and present, include every item. Never use missing-detail placeholders "
     "when those details are in another supplied passage. If only some items are supported, give them and state the gap; "
-    "do not invent names. Use readable, concise Markdown with numbered lists or tables and citations. "
+    "do not invent names. Match the requested detail: for a simple 'what are' or title-only list question, "
+    "return the exact item names in a numbered list, with at most a brief description. Do not add counts, "
+    "modalities, or extra table columns unless asked. If using a table, preserve the source column meanings. "
+    "Use readable, concise Markdown and the supplied citation strings (e.g. [1]), not prose ID references. "
     "Attribute medical/business claims to the document rather than presenting them as independently verified advice. "
     "If there is no relevant evidence or the request is unrelated, reply exactly: " + NO_EVIDENCE
 )
@@ -78,7 +81,7 @@ def make_prompt(question, history, docs):
         return token_count(SYSTEM_PROMPT) + token_count(payload(items)) + sum(token_count(m.content) + 8 for m in messages) + 64 <= MAX_INPUT_TOKENS
 
     for doc in docs:
-        source = {"id": len(sources) + 1, "source": doc.metadata.get("source", "Document"),
+        source = {"id": len(sources) + 1, "citation": f"[{len(sources) + 1}]", "source": doc.metadata.get("source", "Document"),
                   "page": doc.metadata.get("page"), "section": doc.metadata.get("section"),
                   "section_title": doc.metadata.get("section_title"), "table": doc.metadata.get("table_id"),
                   "text": doc.page_content}
@@ -97,6 +100,8 @@ def normalize_citations(answer, source_count):
     answer = re.sub(r"\[(?:source\s*|s)(\d+)\]", r"[\1]", answer, flags=re.I)
     answer = re.sub(r"【(\d+)(?:[†:][^】]*)?】", r"[\1]", answer)
     answer = re.sub(r"\(source\s+(\d+)\)", r"[\1]", answer, flags=re.I)
+    answer = re.sub(r"\(ids?\s*([\d, \-–‑]+)\)",
+                    lambda match: "[" + match.group(1).replace("‑", "-") + "]", answer, flags=re.I)
     cited, invalid = set(), set()
     def replace(match):
         group = match.group(1)
