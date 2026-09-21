@@ -10,7 +10,7 @@ from pypdf.generic import DictionaryObject, NameObject, DecodedStreamObject
 from answer_rendering import answer_html
 from document_loader import load_document
 from limits import MAX_FILE_BYTES, MAX_PDF_PAGES
-from rag import make_prompt, token_count, MAX_INPUT_TOKENS, ask, NO_EVIDENCE, normalize_citations
+from rag import make_prompt, token_count, MAX_INPUT_TOKENS, ask, NO_EVIDENCE, normalize_citations, exact_table_overview
 from retriever import DocumentRetriever, Upload, KeywordIndex
 from test_app import FakeEmbeddings, FakeModel
 
@@ -45,6 +45,25 @@ class RetrievalQualityTests(unittest.TestCase):
             for i in range(1, 11):
                 self.assertIn(f'Area {i} | Unique goal {i}.', sources[0]['text'])
             self.assertLessEqual(sum(token_count(m.content) + 8 for m in messages), MAX_INPUT_TOKENS)
+
+    def test_exact_overview_is_verbatim_and_needs_no_generation(self):
+        r = DocumentRetriever(FakeEmbeddings())
+        r.build([Upload('synthetic.docx', overview_docx())])
+        model = FakeModel()
+        for query in ('what are the 10 observatory research domains?', 'THE TEN OBSERVATORY RESEARCH DOMAINS'):
+            result = ask(r, model, query, [])
+            for i in range(1, 11):
+                self.assertIn(f'{i}. Area {i} [1]', result['answer'])
+            self.assertFalse(result['citation_warning'])
+        self.assertEqual(model.calls, [])
+
+    def test_exact_overview_does_not_handle_explanations_or_conflicts(self):
+        source = {'id': 1, 'table': 1, 'section_title': 'The 2 research domains',
+                  'text': 'Domain | Name\nI | Alpha\nII | Beta'}
+        self.assertIsNone(exact_table_overview('Explain differences between the 2 research domains', [source]))
+        self.assertIsNone(exact_table_overview('What are the 3 research domains?', [source]))
+        other = {**source, 'id': 2, 'text': 'Domain | Name\nI | Gamma\nII | Delta'}
+        self.assertIsNone(exact_table_overview('What are the 2 research domains?', [source, other]))
 
     def test_keyword_search_handles_punctuation_and_plural(self):
         index = KeywordIndex(['other item', 'The ten research domains'])
