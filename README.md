@@ -2,6 +2,8 @@
 
 A Streamlit knowledge assistant for Marketing Operations and other document-based use cases.
 Upload documents, build a session-owned index, and ask questions with numbered source excerpts.
+For an exact numbered overview question matching a named source table, the app extracts the complete list verbatim with source citations; it does not ask the model to reconstruct that table. Explanations, partial/conflicting tables, and broader questions use the generation pipeline.
+
 The graph performs follow-up question rewriting, hybrid keyword/semantic retrieval, complete table/passage expansion, and grounded generation. It can retry once with previously unseen evidence after an insufficient-evidence response.
 It is a fixed RAG workflow, not an autonomous tool-using agent or an approval system.
 

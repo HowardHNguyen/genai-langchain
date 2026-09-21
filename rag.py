@@ -7,6 +7,7 @@ import tiktoken
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.graph import START, END, StateGraph
 from llms import provider_call, ServiceError
+from retriever import terms, is_overview
 
 MAX_QUESTION_CHARS = 4000
 MAX_HISTORY_CHARS = 12000
@@ -123,6 +124,43 @@ def normalize_citations(answer, source_count):
     return answer, cited, warning
 
 
+def exact_table_overview(question, sources):
+    """Extract a named overview list verbatim when query, heading, and row count agree.
+
+    This narrowly handles requests to name a complete list, not explanations,
+    medical advice, comparisons, or conflicting lists across documents.
+    """
+    query = set(terms(question)) - {"list", "name", "give", "show"}
+    counts = [int(t) for t in query if t.isdigit() and 1 <= int(t) <= 100]
+    if not is_overview(question) or len(counts) != 1:
+        return None
+    matches = []
+    for source in sources:
+        heading = set(terms(source.get("section_title") or ""))
+        if not source.get("table") or not query or not query.issubset(heading):
+            continue
+        rows = [[c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", line)]
+                for line in source["text"].splitlines() if "|" in line]
+        if len(rows) != counts[0] + 1:
+            continue
+        headers = [c.casefold().strip() for c in rows[0]]
+        column = next((headers.index(label) for label in ("short name", "name", "title") if label in headers), None)
+        if column is None or any(len(row) <= column or not row[column] for row in rows[1:]):
+            continue
+        names = tuple(row[column] for row in rows[1:])
+        if len(set(names)) != counts[0]:
+            continue
+        matches.append((names, source))
+    if not matches or len({names for names, _ in matches}) != 1:
+        return None
+    names, source = matches[0]
+    def escape_markdown(text):
+        return re.sub(r"([\\`*_{}\[\]()<>#!|])", r"\\\1", text)
+    lines = [f"{i}. {escape_markdown(name)} [{source['id']}]" for i, name in enumerate(names, 1)]
+    return {"answer": "According to the document:\n\n" + "\n".join(lines),
+            "sources": [source], "citation_warning": ""}
+
+
 def create_graph(retriever, model):
     def rewrite(state):
         history = recent_messages(state.get("history", []))
@@ -142,6 +180,9 @@ def create_graph(retriever, model):
         messages, sources, selected = make_prompt(state["question"], state.get("history", []), state["docs"])
         if not sources:
             return {"answer": NO_EVIDENCE, "sources": [], "docs": []}
+        overview = exact_table_overview(state["question"], sources)
+        if overview:
+            return {**overview, "docs": selected}
         response = provider_call("Groq", model.invoke, messages)
         answer = response.content
         if not isinstance(answer, str) or not answer.strip():
