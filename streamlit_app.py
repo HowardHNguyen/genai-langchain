@@ -141,10 +141,13 @@ with chat:
 
 with about:
     st.markdown("""
-### Knowledge assistance for Marketing Operations and beyond
-Upload guidelines, standards, playbooks, or operating models and ask questions grounded in their text.
-The app retrieves passages, generates a cited answer, and shows the supporting excerpts.
-It can help draft summaries and checklists for human review.
+### Your documents, your questions — knowledge assistance for everyone
+This app is for anyone who wants to explore and understand their documents, across any department,
+field, or area of interest. Use it for work, study, research, or personal learning.
+
+Upload your PDF, TXT, DOCX, or EPUB files, click **Build Knowledge Base**, and start chatting.
+Ask questions, request summaries, or find specific details in your uploaded documents.
+The app uses relevant passages to answer your questions and shows source excerpts for you to review.
 
 This is a **LangGraph-orchestrated RAG prototype**. Its workflow is fixed; it does not autonomously
 choose tools, execute actions, or enforce business approvals. Those are future capabilities.

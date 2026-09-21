@@ -1,6 +1,6 @@
 # AI Knowledge Platform — LangGraph RAG prototype
 
-A Streamlit knowledge assistant for Marketing Operations and other document-based use cases.
+A Streamlit knowledge assistant for anyone who wants to explore their documents—for work, study, research, or personal learning.
 Upload documents, build a session-owned index, and ask questions with numbered source excerpts.
 For an exact numbered overview question matching a named source table, the app extracts the complete list verbatim with source citations; it does not ask the model to reconstruct that table. Explanations, partial/conflicting tables, and broader questions use the generation pipeline.
 
