@@ -1,5 +1,7 @@
 # AI Knowledge Platform — LangGraph RAG prototype
 
+**Version 2:** file uploads (`streamlit_app.py`). **Version 3:** public webpage URLs only (`streamlit_url_app.py`). Deploy them as separate Streamlit apps. See [Version 3 setup and usage](VERSION3.md).
+
 A Streamlit knowledge assistant for anyone who wants to explore their documents—for work, study, research, or personal learning.
 Upload documents, build a session-owned index, and ask questions with numbered source excerpts.
 For an exact numbered overview question matching a named source table, the app extracts the complete list verbatim with source citations; it does not ask the model to reconstruct that table. Explanations, partial/conflicting tables, and broader questions use the generation pipeline.
